@@ -4,7 +4,7 @@ import SwiftUI
 struct StowKitApp: App {
     @State private var library = LibraryStore()
     var body: some Scene {
-        WindowGroup {
+        Window("StowKit", id: "library") {
             LibraryView(library: library)
                 .frame(minWidth: 1000, minHeight: 650)
         }
@@ -21,12 +21,16 @@ struct StowKitApp: App {
         }
         Settings {
             Form {
-                Section("Sample Library") {
-                    Text("This is the StowKit native shell preview. All documents are fictional samples, and metadata edits last for this session.")
-                    Text("Document importing, persistent storage, and intelligence will be added in subsequent milestones.")
+                Section("Local Archive") {
+                    Text("Documents and metadata are stored on this Mac. Originals are preserved unchanged; opening a document creates a separate working copy.")
+                    Text("Trash is recoverable and continues to use disk space. iCloud sync and automatic document understanding are not enabled yet.")
                         .foregroundStyle(.secondary)
+                    LabeledContent("Documents", value: "\(library.documents.count)")
+                    LabeledContent("Originals", value: ByteCountFormatter.string(fromByteCount: library.documents.reduce(0) { $0 + $1.fileSize }, countStyle: .file))
+                    Text("Archive location").font(.caption).foregroundStyle(.secondary)
+                    Text(library.storage.root.path).font(.caption).textSelection(.enabled)
                 }
-            }.formStyle(.grouped).frame(width: 440, height: 220)
+            }.formStyle(.grouped).frame(width: 500, height: 340)
         }
     }
 }

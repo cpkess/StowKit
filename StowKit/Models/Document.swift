@@ -1,6 +1,6 @@
 import Foundation
 
-struct LibraryCollection: Identifiable, Hashable {
+struct LibraryCollection: Identifiable, Hashable, Codable, Sendable {
     let name: String
     let symbol: String
     var id: String { name }
@@ -22,34 +22,41 @@ struct LibraryCollection: Identifiable, Hashable {
 }
 
 enum LibraryDestination: Hashable {
-    case inbox, recent, favorites, collection(String)
+    case inbox, recent, favorites, trash, collection(String)
     var title: String {
         switch self {
         case .inbox: "Inbox"
         case .recent: "Recent"
         case .favorites: "Favorites"
+        case .trash: "Trash"
         case .collection(let name): name
         }
     }
 }
 
-struct HouseholdDocument: Identifiable, Equatable {
+struct HouseholdDocument: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
+    let archiveID: UUID
     var title: String
     let originalFilename: String
-    var correspondent: String
+    var correspondent: String = ""
     var documentDate: Date
     let importedAt: Date
-    var summary: String
-    var collections: Set<String>
-    var tags: String
-    var entities: String
+    var modifiedAt: Date
+    var summary: String = ""
+    var collections: Set<String> = []
+    var tags: String = ""
+    var entities: String = ""
     var favorite: Bool = false
-    var needsReview: Bool = false
-    let isImage: Bool
-    let amount: String?
-    let detail: String
-    var previewURL: URL?
+    var needsReview: Bool = true
+    var trashedAt: Date?
+    let contentType: String
+    let contentHash: String
+    let fileSize: Int64
+    let relativePath: String
+
+    var isImage: Bool { contentType != "com.adobe.pdf" }
+    var formatLabel: String { URL(fileURLWithPath: originalFilename).pathExtension.uppercased() }
     var searchableText: String {
         ([title, originalFilename, correspondent, summary, tags, entities,
           documentDate.formatted(date: .abbreviated, time: .omitted)] + collections.sorted()).joined(separator: " ")

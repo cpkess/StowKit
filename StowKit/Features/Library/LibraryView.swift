@@ -1,9 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryView: View {
     @Bindable var library: LibraryStore
     @FocusState private var searchFocused: Bool
-    @State private var showImportInfo = false
+    @State private var showImporter = false
+    @State private var dropTargeted = false
     @State private var showCollectionSheet = false
     @State private var collectionName = ""
 
@@ -12,7 +14,7 @@ struct LibraryView: View {
             List(selection: $library.destination) {
                 Section {
                     Label("Inbox", systemImage: "tray")
-                        .badge(library.documents.filter(\.needsReview).count)
+                        .badge(library.inboxCount)
                         .tag(LibraryDestination.inbox)
                     Label("Recent", systemImage: "clock").tag(LibraryDestination.recent)
                     Label("Favorites", systemImage: "star").tag(LibraryDestination.favorites)
@@ -23,17 +25,20 @@ struct LibraryView: View {
                             .tag(LibraryDestination.collection(collection.name))
                     }
                 }
+                Section {
+                    Label("Trash", systemImage: "trash").badge(library.trashCount).tag(LibraryDestination.trash)
+                }
             }
             .listStyle(.sidebar)
             .navigationTitle("StowKit")
             .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 260)
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    Label("Sample Library", systemImage: "externaldrive")
+                    Label("On My Mac", systemImage: "externaldrive")
                     Spacer()
                     Button { showCollectionSheet = true } label: { Image(systemName: "plus") }
                         .buttonStyle(.borderless).help("New Collection")
-                        .accessibilityLabel("New Collection")
+                        .accessibilityLabel("New Collection").disabled(!library.isReady)
                 }.font(.caption).foregroundStyle(.secondary).padding(14)
             }
         } content: {
@@ -49,26 +54,50 @@ struct LibraryView: View {
                     }
                 }.padding(9).background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6)).padding(12)
                 Divider()
-                if library.visibleDocuments.isEmpty {
+                if let failure = library.startupError {
+                    ContentUnavailableView {
+                        Label("Library Unavailable", systemImage: "externaldrive.badge.exclamationmark")
+                    } description: { Text(failure) } actions: {
+                        Button("Try Again") { Task { await library.start() } }
+                    }.frame(maxHeight: .infinity)
+                } else if !library.isReady {
+                    ProgressView("Opening Library…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if library.visibleDocuments.isEmpty {
                     ContentUnavailableView {
                         Label(library.search.isEmpty ? "No Documents" : "No Results", systemImage: library.search.isEmpty ? "tray" : "magnifyingglass")
                     } description: {
-                        Text(library.search.isEmpty ? "Documents in this view will appear here." : "Try a title, correspondent, tag, or collection.")
+                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, correspondent, tag, or collection.")
+                    } actions: {
+                        if library.search.isEmpty && library.destination != .trash {
+                            Button("Import Documents") { showImporter = true }
+                        }
                     }.frame(maxHeight: .infinity)
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
                                     }
-                                    if let url = document.previewURL {
-                                        Button("Open Sample in Preview", systemImage: "arrow.up.forward.app") { NSWorkspace.shared.open(url) }
+                                    Button("Open a Copy", systemImage: "arrow.up.forward.app") { library.openCopy(document) }
+                                    Divider()
+                                    if document.trashedAt != nil {
+                                        Button("Restore", systemImage: "arrow.uturn.backward") { library.restore(document.id) }
+                                    } else {
+                                        Button("Move to Trash", systemImage: "trash", role: .destructive) { library.moveToTrash(document.id) }
                                     }
                                 }
                         }
+                    }.onDeleteCommand {
+                        if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
+                }
+                if library.isImporting {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(library.importProgress).lineLimit(1).font(.caption)
+                    }.padding(10)
                 }
                 Divider()
                 HStack {
@@ -81,16 +110,20 @@ struct LibraryView: View {
             .navigationTitle(library.destination?.title ?? "Recent")
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 450)
         } detail: {
-            if let index = library.documents.firstIndex(where: { $0.id == library.selection }) {
-                DocumentDetailView(document: $library.documents[index], collections: library.collections)
+            if let document = library.documents.first(where: { $0.id == library.selection }) {
+                DocumentDetailView(document: library.binding(for: document), collections: library.collections,
+                    storage: library.storage, thumbnails: library.thumbnails,
+                    openCopy: { library.openCopy(document) },
+                    trashOrRestore: { document.trashedAt == nil ? library.moveToTrash(document.id) : library.restore(document.id) })
+                    .id(document.id)
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
             }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showImportInfo = true } label: { Label("Import Document", systemImage: "plus") }
-                    .help("Import Document (⌘N)").keyboardShortcut("n")
+                Button { showImporter = true } label: { Label("Import Document", systemImage: "plus") }
+                    .help("Import Document (⌘N)").keyboardShortcut("n").disabled(!library.isReady)
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -101,7 +134,20 @@ struct LibraryView: View {
                 } label: { Label("Sort", systemImage: "arrow.up.arrow.down") }.help("Sort Documents")
             }
         }
-        .task { await library.preparePreviews() }
+        .task { await library.start() }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: DocumentStorageManager.supportedTypes, allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls): library.enqueueImports(urls)
+            case .failure(let error):
+                if (error as NSError).code != NSUserCancelledError { library.errorMessage = error.localizedDescription }
+            }
+        }
+        .onDrop(of: [UTType.fileURL], isTargeted: $dropTargeted, perform: library.acceptDrop)
+        .overlay {
+            if dropTargeted && library.isReady {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3).padding(4).allowsHitTesting(false)
+            }
+        }
         .onChange(of: library.destination) { library.reconcileSelection() }
         .onChange(of: library.search) { library.reconcileSelection() }
         .onChange(of: library.visibleDocuments.map(\.id)) { library.reconcileSelection() }
@@ -110,12 +156,26 @@ struct LibraryView: View {
             library.destination = .recent
             searchFocused = true
         }
-        .alert("Sample Library", isPresented: $showImportInfo) {
-            Button("OK", role: .cancel) { }
-        } message: { Text("This first milestone previews the native StowKit experience using fictional documents. Importing your files will be available in the next milestone.") }
-        .alert("Preview Unavailable", isPresented: Binding(get: { library.previewError != nil }, set: { if !$0 { library.previewError = nil } })) {
-            Button("OK") { library.previewError = nil }
-        } message: { Text(library.previewError ?? "") }
+        .alert("StowKit", isPresented: Binding(get: { library.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil } })) {
+            Button("OK") { library.errorMessage = nil }
+        } message: { Text(library.errorMessage ?? "") }
+        .sheet(item: $library.importReport) { report in
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Import Results").font(.title2.weight(.semibold))
+                Text("Imported \(report.imported) · Already in archive \(report.duplicates) · Failed \(report.issues.filter { $0.documentID == nil }.count)")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                List(report.issues) { issue in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(issue.filename).font(.headline)
+                        Text(issue.message).foregroundStyle(.secondary).textSelection(.enabled)
+                        if let id = issue.documentID {
+                            Button("Show Document") { library.importReport = nil; library.showDocument(id) }
+                        }
+                    }.padding(.vertical, 5)
+                }
+                HStack { Spacer(); Button("Done") { library.importReport = nil }.keyboardShortcut(.defaultAction) }
+            }.padding(24).frame(width: 540, height: 380)
+        }
         .sheet(isPresented: $showCollectionSheet) {
             VStack(alignment: .leading, spacing: 18) {
                 Text("New Collection").font(.headline)
@@ -131,13 +191,12 @@ struct LibraryView: View {
     }
     private var canCreateCollection: Bool {
         let name = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !name.isEmpty && !library.collections.contains { $0.name.localizedCompare(name) == .orderedSame }
+        return !name.isEmpty && !library.collections.contains { $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
     }
     private func createCollection() {
         guard canCreateCollection else { return }
         let name = collectionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        library.collections.append(.init(name: name, symbol: "folder"))
-        library.destination = .collection(name)
+        guard library.createCollection(name) else { return }
         collectionName = ""
         showCollectionSheet = false
     }
@@ -145,26 +204,37 @@ struct LibraryView: View {
 
 private struct DocumentRow: View {
     let document: HouseholdDocument
+    let thumbnails: ThumbnailService
+    @State private var thumbnail: NSImage?
     var body: some View {
         HStack(alignment: .top, spacing: 11) {
-            Image(systemName: document.isImage ? "photo" : "doc.richtext")
-                .font(.system(size: 26, weight: .light)).foregroundStyle(.secondary)
-                .frame(width: 30, height: 38).padding(.top, 3)
+            Group {
+                if let thumbnail {
+                    Image(nsImage: thumbnail).resizable().scaledToFit()
+                } else {
+                    Image(systemName: document.isImage ? "photo" : "doc.richtext")
+                        .font(.system(size: 26, weight: .light)).foregroundStyle(.secondary)
+                }
+            }.frame(width: 30, height: 40).padding(.top, 3).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(document.title).font(.headline).lineLimit(2)
                     if document.favorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow).accessibilityLabel("Favorite") }
                 }
-                Text(document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(document.correspondent.isEmpty ? "No correspondent" : document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 HStack {
                     Text(document.documentDate, format: .dateTime.month(.abbreviated).day().year())
                     Spacer(minLength: 4)
                     if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
                         Text("Review")
-                    } else { Text(document.isImage ? "PNG" : "PDF") }
+                    } else { Text(document.formatLabel) }
                 }.font(.caption).foregroundStyle(.secondary)
             }
         }.padding(.vertical, 9).accessibilityElement(children: .combine)
+            .task(id: document.id) {
+                thumbnail = nil
+                if let data = try? await thumbnails.thumbnail(for: document), !Task.isCancelled { thumbnail = NSImage(data: data) }
+            }
     }
 }
