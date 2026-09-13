@@ -1,0 +1,29 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+50DA41C9199CD8E422D6F5D7 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/App/LibraryStore.swift"; sourceTree = SOURCE_ROOT; };
+284B6E0FE9609C4C84A78E3F = { isa = PBXBuildFile; fileRef = 50DA41C9199CD8E422D6F5D7; };
+7E2BBAF152A87E3FB0441DB6 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/App/StowKitApp.swift"; sourceTree = SOURCE_ROOT; };
+15EF950F6351C8658808B539 = { isa = PBXBuildFile; fileRef = 7E2BBAF152A87E3FB0441DB6; };
+4CE7F865110DB3DB0272DDF4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/Features/DocumentViewer/DocumentDetailView.swift"; sourceTree = SOURCE_ROOT; };
+A17CD8552A9548E90D03A8FA = { isa = PBXBuildFile; fileRef = 4CE7F865110DB3DB0272DDF4; };
+4BB8A0B530208C132ECF38AC = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/Features/Library/LibraryView.swift"; sourceTree = SOURCE_ROOT; };
+BCB66CF74DFBD2F5CAFE07B2 = { isa = PBXBuildFile; fileRef = 4BB8A0B530208C132ECF38AC; };
+7462967A17989818513C1090 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/Models/Document.swift"; sourceTree = SOURCE_ROOT; };
+23D67A10333727E71BA9EDF4 = { isa = PBXBuildFile; fileRef = 7462967A17989818513C1090; };
+F6822EAD49F57BCD5261A37D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StowKit/SampleData/SampleLibrary.swift"; sourceTree = SOURCE_ROOT; };
+3F276560122B4F3088A2FE1E = { isa = PBXBuildFile; fileRef = F6822EAD49F57BCD5261A37D; };
+38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = StowKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+64292B1C2B2E13EAD8788FC8 = { isa = PBXGroup; children = (50DA41C9199CD8E422D6F5D7, 7E2BBAF152A87E3FB0441DB6, 4CE7F865110DB3DB0272DDF4, 4BB8A0B530208C132ECF38AC, 7462967A17989818513C1090, F6822EAD49F57BCD5261A37D, FBDC4F23F93125BBEEAE800C); sourceTree = "<group>"; };
+FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9); name = Products; sourceTree = "<group>"; };
+BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (284B6E0FE9609C4C84A78E3F, 15EF950F6351C8658808B539, A17CD8552A9548E90D03A8FA, BCB66CF74DFBD2F5CAFE07B2, 23D67A10333727E71BA9EDF4, 3F276560122B4F3088A2FE1E); runOnlyForDeploymentPostprocessing = 0; };
+7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = F497FD0CF9CA1625C4A860DE; buildPhases = (BCE16DD0260827ECF338C787, 7561BFB015D8F536760CB671, 0189424A5A60FED329FA868E); buildRules = (); dependencies = (); name = StowKit; productName = StowKit; productReference = 38A007151ABE87CC01A5B6E9; productType = "com.apple.product-type.application"; };
+98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { LastSwiftUpdateCheck = 2630; LastUpgradeCheck = 2630; }; buildConfigurationList = 49EA05A46B1A86EA7E413B43; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 64292B1C2B2E13EAD8788FC8; productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E); };
+7082CC0B6FC1282FCEABD07A = { isa = XCBuildConfiguration; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.stowkit.app; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity"; INFOPLIST_KEY_CFBundleDisplayName = StowKit; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1; CODE_SIGN_STYLE = Automatic; CODE_SIGN_IDENTITY = "-"; ENABLE_APP_SANDBOX = YES; ENABLE_USER_SELECTED_FILES = readonly; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };
+639A7CA24D39909E713B47F7 = { isa = XCBuildConfiguration; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; PRODUCT_BUNDLE_IDENTIFIER = com.stowkit.app; PRODUCT_NAME = "$(TARGET_NAME)"; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity"; INFOPLIST_KEY_CFBundleDisplayName = StowKit; MARKETING_VERSION = 0.1.0; CURRENT_PROJECT_VERSION = 1; CODE_SIGN_STYLE = Automatic; CODE_SIGN_IDENTITY = "-"; ENABLE_APP_SANDBOX = YES; ENABLE_USER_SELECTED_FILES = readonly; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+F497FD0CF9CA1625C4A860DE = { isa = XCConfigurationList; buildConfigurations = (7082CC0B6FC1282FCEABD07A, 639A7CA24D39909E713B47F7); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; DEBUG_INFORMATION_FORMAT = dwarf; }; name = Debug; };
+E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; buildSettings = { MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-O"; }; name = Release; };
+49EA05A46B1A86EA7E413B43 = { isa = XCConfigurationList; buildConfigurations = (89E1FD6268CC0F221A2BE178, E6DE6C99132752C914FEF632); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+}; rootObject = 98F54143AB4E86B28C3AFEE0; }
