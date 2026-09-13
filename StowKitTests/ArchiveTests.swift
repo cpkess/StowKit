@@ -197,7 +197,7 @@ import UniformTypeIdentifiers
     }
 
     func testLibraryStoreBatchContinuesAfterFailureAndPersistsEdits() async throws {
-        let store = LibraryStore(root: root)
+        let store = LibraryStore(root: root, processingEnabled: false)
         await store.start()
         XCTAssertTrue(store.isReady)
         let bad = directory.appendingPathComponent("bad.txt")
@@ -221,15 +221,19 @@ import UniformTypeIdentifiers
         store.restore(document.id)
         store.destination = .recent
         store.search = "house 2026"
+        let searchDeadline = Date().addingTimeInterval(5)
+        while store.isSearchingText && Date() < searchDeadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(store.isSearchingText)
+        XCTAssertNil(store.textSearchError)
         XCTAssertEqual(store.visibleDocuments.count, 1)
-        let reopened = LibraryStore(root: root)
+        let reopened = LibraryStore(root: root, processingEnabled: false)
         await reopened.start()
         XCTAssertEqual(reopened.documents.first?.title, "Saved household record")
         XCTAssertNil(reopened.documents.first?.trashedAt)
     }
 
     func testDroppedFileProvidersImportURLsAndDataRepresentations() async throws {
-        let store = LibraryStore(root: root)
+        let store = LibraryStore(root: root, processingEnabled: false)
         await store.start()
         let first = try pdf("Drop URL.pdf", width: 400)
         let second = try pdf("Drop Data.pdf", width: 500)

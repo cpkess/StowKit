@@ -6,11 +6,11 @@ import SwiftData
     typealias Record = ArchiveSchemaV1.DocumentRecord
     let container: ModelContainer
     let archiveID: UUID
-    private let context: ModelContext
+    let context: ModelContext
 
     init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV1.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV2.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])
@@ -48,6 +48,7 @@ import SwiftData
         // Explicit duplicate handling avoids SwiftData's unique-attribute upsert changing metadata.
         guard try matching(hash: document.contentHash) == nil else { throw ArchiveError.duplicate }
         context.insert(Record(document))
+        context.insert(ArchiveSchemaV2.ProcessingJobRecord(documentID: document.id, paused: document.trashedAt != nil))
         try save()
     }
     func update(_ document: HouseholdDocument) throws {
@@ -55,6 +56,15 @@ import SwiftData
         let descriptor = FetchDescriptor<Record>(predicate: #Predicate { $0.id == id })
         guard let record = try context.fetch(descriptor).first else { throw ArchiveError.missingRecord }
         record.updateMetadata(from: document)
+        if let job = try processingJob(document.id) {
+            if document.trashedAt != nil && (job.state == ProcessingState.queued.rawValue || job.snapshot.state.isActive) {
+                job.state = ProcessingState.paused.rawValue
+                job.updatedAt = Date()
+            } else if document.trashedAt == nil && job.state == ProcessingState.paused.rawValue {
+                job.state = ProcessingState.queued.rawValue
+                job.updatedAt = Date()
+            }
+        }
         try save()
     }
     func addCollection(_ name: String) throws -> LibraryCollection {
@@ -67,7 +77,7 @@ import SwiftData
         try save()
         return collection
     }
-    private func save() throws {
+    func save() throws {
         do { try context.save() }
         catch { context.rollback(); throw error }
     }

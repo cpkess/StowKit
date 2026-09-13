@@ -9,6 +9,9 @@ struct DocumentDetailView: View {
     let thumbnails: ThumbnailService
     let openCopy: () -> Void
     let trashOrRestore: () -> Void
+    let processing: ProcessingSnapshot?
+    let textService: TextSearchService?
+    let retryProcessing: (Bool) -> Void
     @State private var showDetails = true
     @State private var quickLookURL: URL?
 
@@ -34,6 +37,9 @@ struct DocumentDetailView: View {
                 if showDetails {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
+                            ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
+                                isTrashed: document.trashedAt != nil, retry: retryProcessing)
+                            Divider()
                             if document.trashedAt != nil {
                                 HStack {
                                     Label("This document is in Trash", systemImage: "trash").foregroundStyle(.secondary)
@@ -87,7 +93,7 @@ struct DocumentDetailView: View {
                                 field("Storage") { Label("Available offline", systemImage: "internaldrive") }
                                 field("File size") { Text(ByteCountFormatter.string(fromByteCount: document.fileSize, countStyle: .file)) }
                                 field("Imported") { Text(document.importedAt, format: .dateTime.month().day().year()) }
-                                field("Processing") { Text(document.needsReview ? "Imported · Needs review" : "Filed manually") }
+                                field("Processing") { Text(processing?.progressLabel ?? "Queued") }
                             }.font(.caption).foregroundStyle(.secondary)
                         }.padding(20)
                     }.frame(minHeight: 180, idealHeight: 300, maxHeight: 350)

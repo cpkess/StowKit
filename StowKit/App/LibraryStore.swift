@@ -20,7 +20,7 @@ final class LibraryStore {
     private(set) var documents: [HouseholdDocument] = []
     var destination: LibraryDestination? = .recent
     var selection: UUID?
-    var search = ""
+    var search = "" { didSet { refreshTextSearch() } }
     var errorMessage: String?
     private(set) var startupError: String?
     private(set) var isReady = false
@@ -31,29 +31,45 @@ final class LibraryStore {
     private(set) var importProgress = ""
     private(set) var lastImportMessage = ""
     var importReport: ImportReport?
+    private(set) var processing: [UUID: ProcessingSnapshot] = [:]
+    private(set) var isSearchingText = false
+    private(set) var textSearchError: String?
+    private(set) var textSearchService: TextSearchService?
+    private(set) var textMatches: [String: Set<UUID>] = [:]
+    @ObservationIgnored private var processor: DocumentProcessor?
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var searchGeneration = 0
+    @ObservationIgnored private let processingEnabled: Bool
     let storage: DocumentStorageManager
     let thumbnails: ThumbnailService
     @ObservationIgnored private var repository: ArchiveRepository?
     @ObservationIgnored private var importer: DocumentImporter?
     @ObservationIgnored private var pendingURLs: [URL] = []
 
-    init(root: URL = DocumentStorageManager.defaultRoot) {
+    init(root: URL = DocumentStorageManager.defaultRoot, processingEnabled: Bool = true) {
+        self.processingEnabled = processingEnabled
         storage = DocumentStorageManager(root: root)
         thumbnails = ThumbnailService(storage: storage)
     }
-    var inboxCount: Int { documents.filter { $0.needsReview && $0.trashedAt == nil }.count }
+    var inboxCount: Int { documents.filter { ($0.needsReview || processing[$0.id]?.state == .failed) && $0.trashedAt == nil }.count }
+    var pendingProcessingCount: Int { processing.values.filter { $0.state == .queued || $0.state.isActive }.count }
+    var activeProcessing: ProcessingSnapshot? { processing.values.first { $0.state.isActive } }
+    private var searchTerms: [String] {
+        Array(Set(search.split(whereSeparator: \.isWhitespace).map { TextNormalization.searchKey(String($0)) })).sorted()
+    }
     var trashCount: Int { documents.filter { $0.trashedAt != nil }.count }
     var visibleDocuments: [HouseholdDocument] {
         documents.filter { document in
             let matchesDestination: Bool = switch destination {
             case .trash: document.trashedAt != nil
-            case .inbox: document.trashedAt == nil && document.needsReview
+            case .inbox: document.trashedAt == nil && (document.needsReview || processing[document.id]?.state == .failed)
             case .favorites: document.trashedAt == nil && document.favorite
             case .collection(let name): document.trashedAt == nil && document.collections.contains(name)
             default: document.trashedAt == nil
             }
-            let terms = search.split(whereSeparator: \.isWhitespace)
-            return matchesDestination && terms.allSatisfy { document.searchableText.localizedStandardContains(String($0)) }
+            return matchesDestination && searchTerms.allSatisfy {
+                TextNormalization.searchKey(document.searchableText).contains($0) || textMatches[$0]?.contains(document.id) == true
+            }
         }.sorted {
             if newestFirst { return $0.importedAt == $1.importedAt ? $0.id.uuidString < $1.id.uuidString : $0.importedAt > $1.importedAt }
             return $0.title.localizedStandardCompare($1.title) == .orderedAscending
@@ -81,7 +97,17 @@ final class LibraryStore {
             }
             documents = try repository.documents()
             collections = try repository.collections()
+            try repository.recoverProcessingQueue()
+            processing = try repository.processingSnapshots()
+            let container = repository.container
+            textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
+            processor = DocumentProcessor(repository: repository, storage: storage, onUpdate: { [weak self] snapshot in
+                self?.processing[snapshot.id] = snapshot
+                if snapshot.state == .complete || snapshot.state == .failed { self?.refreshTextSearch() }
+            }, onError: { [weak self] message in self?.errorMessage = message })
             isReady = true
+            if processingEnabled { processor?.start() }
+            refreshTextSearch()
             reconcileSelection()
         } catch { startupError = error.localizedDescription }
     }
@@ -96,6 +122,8 @@ final class LibraryStore {
         do {
             try repository.update(edited)
             documents[index] = edited
+            if let snapshot = try repository.processingJob(document.id)?.snapshot { processing[document.id] = snapshot }
+            if processingEnabled { processor?.start() }
             reconcileSelection()
         } catch { errorMessage = "Your change could not be saved.\n\n\(error.localizedDescription)" }
     }
@@ -160,6 +188,8 @@ final class LibraryStore {
                             message: result.document.trashedAt == nil ? "Already in your library as “\(result.document.title)”." : "Already in Trash as “\(result.document.title)”. Restore it from Trash.", documentID: result.document.id))
                     } else {
                         documents.insert(result.document, at: 0)
+                        if let snapshot = try repository?.processingJob(result.document.id)?.snapshot { processing[result.document.id] = snapshot }
+                        if processingEnabled { processor?.start() }
                         report.imported += 1
                         // Imports always appear in Inbox until manually reviewed; no AI is implied.
                         destination = .inbox
@@ -176,6 +206,40 @@ final class LibraryStore {
             if !report.issues.isEmpty { importReport = report }
         }
     }
+    func retryProcessing(_ id: UUID, restart: Bool = false) {
+        guard let repository else { return }
+        do {
+            processing[id] = try repository.retryProcessing(id, restart: restart)
+            refreshTextSearch()
+            if processingEnabled { processor?.start() }
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func refreshTextSearch() {
+        searchTask?.cancel()
+        searchGeneration += 1
+        let generation = searchGeneration
+        let terms = searchTerms
+        textMatches = [:]
+        textSearchError = nil
+        guard let service = textSearchService, !terms.isEmpty else { isSearchingText = false; return }
+        isSearchingText = true
+        searchTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(150))
+                let matches = try await service.matches(terms: terms)
+                guard !Task.isCancelled, searchGeneration == generation else { return }
+                textMatches = matches
+                isSearchingText = false
+                reconcileSelection()
+            } catch is CancellationError { }
+            catch {
+                guard searchGeneration == generation else { return }
+                isSearchingText = false
+                textSearchError = "Document text could not be searched. Metadata results are shown."
+            }
+        }
+    }
+
     func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
         guard isReady else { return false }
         let supported = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }

@@ -62,11 +62,13 @@ struct LibraryView: View {
                     }.frame(maxHeight: .infinity)
                 } else if !library.isReady {
                     ProgressView("Opening Library…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if library.visibleDocuments.isEmpty && library.isSearchingText {
+                    ProgressView("Searching Document Text…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if library.visibleDocuments.isEmpty {
                     ContentUnavailableView {
                         Label(library.search.isEmpty ? "No Documents" : "No Results", systemImage: library.search.isEmpty ? "tray" : "magnifyingglass")
                     } description: {
-                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, correspondent, tag, or collection.")
+                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, correspondent, tag, or words inside a document.")
                     } actions: {
                         if library.search.isEmpty && library.destination != .trash {
                             Button("Import Documents") { showImporter = true }
@@ -75,7 +77,7 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id]).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
@@ -92,6 +94,17 @@ struct LibraryView: View {
                     }.onDeleteCommand {
                         if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
+                }
+                if library.pendingProcessingCount > 0 {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(library.activeProcessing?.progressLabel ?? "Waiting to extract text").lineLimit(1)
+                        Spacer()
+                        Text("\(library.pendingProcessingCount) remaining")
+                    }.font(.caption).foregroundStyle(.secondary).padding(10)
+                }
+                if let message = library.textSearchError {
+                    Text(message).font(.caption).foregroundStyle(.secondary).padding(10)
                 }
                 if library.isImporting {
                     HStack(spacing: 8) {
@@ -114,7 +127,9 @@ struct LibraryView: View {
                 DocumentDetailView(document: library.binding(for: document), collections: library.collections,
                     storage: library.storage, thumbnails: library.thumbnails,
                     openCopy: { library.openCopy(document) },
-                    trashOrRestore: { document.trashedAt == nil ? library.moveToTrash(document.id) : library.restore(document.id) })
+                    trashOrRestore: { document.trashedAt == nil ? library.moveToTrash(document.id) : library.restore(document.id) },
+                    processing: library.processing[document.id], textService: library.textSearchService,
+                    retryProcessing: { library.retryProcessing(document.id, restart: $0) })
                     .id(document.id)
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
@@ -205,6 +220,7 @@ struct LibraryView: View {
 private struct DocumentRow: View {
     let document: HouseholdDocument
     let thumbnails: ThumbnailService
+    let processing: ProcessingSnapshot?
     @State private var thumbnail: NSImage?
     var body: some View {
         HStack(alignment: .top, spacing: 11) {
@@ -225,7 +241,13 @@ private struct DocumentRow: View {
                 HStack {
                     Text(document.documentDate, format: .dateTime.month(.abbreviated).day().year())
                     Spacer(minLength: 4)
-                    if document.needsReview {
+                    if processing?.state == .failed {
+                        Label("Text unavailable", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                    } else if processing?.state.isActive == true {
+                        Text("Extracting text")
+                    } else if processing?.state == .queued {
+                        Text("Queued")
+                    } else if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
                         Text("Review")
                     } else { Text(document.formatLabel) }
