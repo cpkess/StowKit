@@ -35,7 +35,7 @@ struct SyncMerge: Sendable {
     let conflicts: [SyncConflict]
 }
 
-/// Three-way policy only. Receiving/applying remote records remains a later slice.
+/// Three-way policy shared by local incoming application and conflict tests.
 enum SyncMergePolicy {
     static func merge(base: [String: SyncField], local: [String: SyncField],
                       server: [String: SyncField]) -> SyncMerge {

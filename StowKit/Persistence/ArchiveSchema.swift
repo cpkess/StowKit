@@ -84,6 +84,6 @@ enum ArchiveSchemaV1: VersionedSchema {
 }
 
 enum ArchiveMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [ArchiveSchemaV1.self, ArchiveSchemaV2.self, ArchiveSchemaV3.self, ArchiveSchemaV4.self, ArchiveSchemaV5.self] }
-    static var stages: [MigrationStage] { [.lightweight(fromVersion: ArchiveSchemaV1.self, toVersion: ArchiveSchemaV2.self), .lightweight(fromVersion: ArchiveSchemaV2.self, toVersion: ArchiveSchemaV3.self), .lightweight(fromVersion: ArchiveSchemaV3.self, toVersion: ArchiveSchemaV4.self), .lightweight(fromVersion: ArchiveSchemaV4.self, toVersion: ArchiveSchemaV5.self)] }
+    static var schemas: [any VersionedSchema.Type] { [ArchiveSchemaV1.self, ArchiveSchemaV2.self, ArchiveSchemaV3.self, ArchiveSchemaV4.self, ArchiveSchemaV5.self, ArchiveSchemaV6.self] }
+    static var stages: [MigrationStage] { [.lightweight(fromVersion: ArchiveSchemaV1.self, toVersion: ArchiveSchemaV2.self), .lightweight(fromVersion: ArchiveSchemaV2.self, toVersion: ArchiveSchemaV3.self), .lightweight(fromVersion: ArchiveSchemaV3.self, toVersion: ArchiveSchemaV4.self), .lightweight(fromVersion: ArchiveSchemaV4.self, toVersion: ArchiveSchemaV5.self), .lightweight(fromVersion: ArchiveSchemaV5.self, toVersion: ArchiveSchemaV6.self)] }
 }

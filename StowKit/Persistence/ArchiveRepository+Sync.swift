@@ -28,7 +28,7 @@ extension ArchiveRepository {
     }
 
     func journalDocument(_ document: HouseholdDocument) throws {
-        let protected = Set(try analysis(document.id)?.protectedFields ?? [])
+        let protected = Set(try analysis(document.id)?.protectedFields ?? UnderstandingPolicy.fields)
         var values: [String: SyncValue] = [
             "id": .text(document.id.uuidString), "contentHash": .text(document.contentHash),
             "originalFilename": .text(document.originalFilename), "contentType": .text(document.contentType),
@@ -72,6 +72,10 @@ extension ArchiveRepository {
         }
         let metadata = SyncMetadata(archiveID: archiveID, recordKey: key, fields: fields)
         guard metadata != previous else { return }
+        for conflict in try openConflictRecords(key) {
+            let observed = try JSONDecoder().decode(SyncField.self, from: conflict.observedField)
+            if metadata.fields[conflict.field] != observed { conflict.status = "superseded" }
+        }
         let payload = try JSONEncoder().encode(metadata)
         if let existing {
             existing.operationID = operationID; existing.payload = payload
@@ -80,7 +84,8 @@ extension ArchiveRepository {
     }
 
     func pendingSyncOperations(limit: Int = 64) throws -> [SyncOperation] {
-        var query = FetchDescriptor<SyncRecord>(predicate: #Predicate { $0.pending },
+        let blocked = Array(Set(try openConflictRecords().map(\.recordKey)))
+        var query = FetchDescriptor<SyncRecord>(predicate: #Predicate { $0.pending && !blocked.contains($0.key) },
             sortBy: [SortDescriptor(\.changedAt), SortDescriptor(\.key)])
         query.fetchLimit = max(1, min(limit, 256))
         return try context.fetch(query).map {

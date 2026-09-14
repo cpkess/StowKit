@@ -1,6 +1,6 @@
 # StowKit
 
-A native, local-first macOS household document archive. **Milestones 1–5 implemented; iCloud architecture and the first local sync foundation are complete.** Live synchronization remains disabled.
+A native, local-first macOS household document archive. **Milestones 1–5 implemented; iCloud architecture, local sync receipts, backfill, and recovery are implemented.** Live synchronization remains disabled.
 
 ## Run
 
@@ -65,6 +65,6 @@ Run **Product → Test (⌘U)** in Xcode or:
 xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -derivedDataPath /tmp/StowKitDerived -destination 'platform=macOS' test
 ```
 
-The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migrations through V5, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, metadata updates, pagination, journal replay, and cache failure/rebuilding. Local sync tests cover coalesced change receipts, stale acknowledgments, fake-transport retry, and field conflict policies. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
+The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migrations through V6, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, metadata updates, pagination, journal replay, and cache failure/rebuilding. Local sync tests cover coalesced change receipts, stale acknowledgments, fake-transport retry, resumable backfill, atomic incoming pages, and persisted conflict resolution. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
 
-See [architecture and implementation notes](docs/ARCHITECTURE.md), the proposed [iCloud and household architecture](docs/ICLOUD_ARCHITECTURE.md), and [validation](docs/VALIDATION.md). Metadata changes now keep local sync receipts, but the app never constructs a network transport. Historical backfill, server baselines, incoming-change application, and persisted conflict resolution are next, before live CloudKit provisioning.
+See [architecture and implementation notes](docs/ARCHITECTURE.md), the proposed [iCloud and household architecture](docs/ICLOUD_ARCHITECTURE.md), and [validation](docs/VALIDATION.md). Metadata changes now keep local sync receipts, but the app never constructs a network transport. Backfill and incoming recovery run against test transports. Normalized collection migration, new remote documents, and conflict review UI remain before live CloudKit provisioning.

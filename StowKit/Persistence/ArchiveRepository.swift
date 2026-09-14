@@ -10,7 +10,7 @@ import SwiftData
 
     init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV5.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV6.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])

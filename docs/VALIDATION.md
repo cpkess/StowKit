@@ -1,12 +1,18 @@
 # Validation
 
-## Local sync foundation
+## Local sync recovery
+
+September 14, 2026: the expanded Debug suite passes **82 tests with zero failures**, including 12 new recovery tests. The Release build also succeeded. These cover bounded backfill across restart, edits during backfill, rollback without advancing the checkpoint, conservative legacy protections, independent-field merges and search indexing, persisted baselines/cursors, conflict history and resolution, newer local edits invalidating stale resolutions, later remote edits retaining the local alternative, all-or-nothing invalid-page rejection, stale page rejection, unsupported versions/archive identities/memberships, fake fetch retry, and V5 migration preserving a pending operation UUID.
+
+The receiver handles existing local documents and known collection identities only. Backfill, incoming feeds, and conflict resolution are repository/test APIs, not enabled UI features. No iCloud transport, account binding, new remote originals, or eviction is present. The outgoing fake protocol does not yet implement conditional server saves. The prior Core Data diagnostics remain present; all migration assertions pass. No new interactive UI verification is claimed.
+
+## Local sync foundation (earlier slice)
 
 Validated September 14, 2026 with Xcode 26.3 / Swift 6.2.4 on macOS 15.7.3, Apple Silicon. The Debug suite passed **70 tests with zero failures**, including all prior 57 tests and 13 new sync tests. The Release build also succeeded.
 
 New coverage includes persisted/coalesced snapshots across restart; exact-operation acknowledgments preserving newer edits; unchanged-edit suppression; stable collection IDs and explicit membership removals; journal failure rolling back metadata, manual protections, and search receipts; automatic versus explicitly accepted metadata; fake delivery with a lost acknowledgment and idempotent retry; bounded batches and partial acknowledgment; manual/automatic and same-field conflict policies; Trash/Restore and membership merge behavior; V4 migration preserving document metadata, protected fields, saved OCR progress/text, and search receipts without historical upload enqueueing; and missing/wrong-size original rejection without deleting bytes.
 
-These are local tests with generated fixtures. The app does not instantiate the transport, contact CloudKit, upload documents, or evict originals. Fake transport tests establish receipt behavior, not CloudKit save semantics. Incoming remote application, durable conflict resolution, collection alias migration, download leases, live account sharing, and metadata-only CloudKit fetches remain unverified/unimplemented. No new interactive UI verification is claimed for this slice. The previously documented Core Data model-checksum and array-materialization diagnostics remain present; migration assertions and all tests pass.
+These are local tests with generated fixtures. The app does not instantiate the transport, contact CloudKit, upload documents, or evict originals. Fake transport tests establish receipt behavior, not CloudKit save semantics. At that checkpoint, incoming application and conflict persistence were still pending; the recovery section above records their subsequent local implementation. Collection alias migration, download leases, live account sharing, and metadata-only CloudKit fetches remain unverified/unimplemented. No new interactive UI verification is claimed for this slice. The previously documented Core Data model-checksum and array-materialization diagnostics remain present; migration assertions and all tests pass.
 
 ## Milestone 6 architecture review
 
