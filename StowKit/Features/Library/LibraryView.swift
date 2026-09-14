@@ -77,7 +77,7 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id]).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "").tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
@@ -94,6 +94,10 @@ struct LibraryView: View {
                     }.onDeleteCommand {
                         if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
+                }
+                if library.hasMore {
+                    Button(library.isLoadingMore ? "Loading…" : "Load More") { library.loadMore() }
+                        .disabled(library.isSearchingText).padding(8)
                 }
                 if library.pendingProcessingCount > 0 {
                     HStack(spacing: 8) {
@@ -114,7 +118,7 @@ struct LibraryView: View {
                 }
                 Divider()
                 HStack {
-                    Text("\(library.visibleDocuments.count) \(library.visibleDocuments.count == 1 ? "document" : "documents")")
+                    Text("\(library.visibleDocuments.count) of \(library.totalResults) documents")
                     Spacer()
                     if library.destination == .inbox { Text("Needs review") }
                     else { Text("On this Mac") }
@@ -123,7 +127,7 @@ struct LibraryView: View {
             .navigationTitle(library.destination?.title ?? "Recent")
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 450)
         } detail: {
-            if let document = library.documents.first(where: { $0.id == library.selection }) {
+            if let document = library.selectedDocument {
                 DocumentDetailView(document: library.binding(for: document), collections: library.collections,
                     storage: library.storage, thumbnails: library.thumbnails,
                     openCopy: { library.openCopy(document) },
@@ -221,7 +225,18 @@ private struct DocumentRow: View {
     let document: HouseholdDocument
     let thumbnails: ThumbnailService
     let processing: ProcessingSnapshot?
+    let snippet: String
     @State private var thumbnail: NSImage?
+    private var highlightedSnippet: Text {
+        var result = Text("")
+        for (index, part) in snippet.components(separatedBy: "\u{E000}").enumerated() {
+            if index == 0 { result = result + Text(part); continue }
+            let pieces = part.components(separatedBy: "\u{E001}")
+            result = result + Text(pieces[0]).bold()
+            if pieces.count > 1 { result = result + Text(pieces.dropFirst().joined()) }
+        }
+        return result
+    }
     var body: some View {
         HStack(alignment: .top, spacing: 11) {
             Group {
@@ -238,6 +253,9 @@ private struct DocumentRow: View {
                     if document.favorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow).accessibilityLabel("Favorite") }
                 }
                 Text(document.correspondent.isEmpty ? "No correspondent" : document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                if !snippet.isEmpty {
+                    highlightedSnippet.font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                }
                 HStack {
                     Text(document.documentDate, format: .dateTime.month(.abbreviated).day().year())
                     Spacer(minLength: 4)

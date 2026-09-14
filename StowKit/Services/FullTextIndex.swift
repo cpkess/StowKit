@@ -1,0 +1,137 @@
+import Foundation
+import SQLite3
+
+/// Used exclusively by TextSearchService's background model actor. This is a disposable cache.
+final class FullTextIndex {
+    private var database: OpaquePointer?
+    private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    struct Failure: LocalizedError {
+        let code: Int32
+        let message: String
+        var errorDescription: String? { "Search index: \(message)" }
+    }
+    init(url: URL, archiveID: UUID) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let code = sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
+        guard code == SQLITE_OK else { let error = failure(code); sqlite3_close(database); database = nil; throw error }
+        do {
+            sqlite3_busy_timeout(database, 5_000)
+            try execute("PRAGMA journal_mode=WAL")
+            try execute("PRAGMA synchronous=FULL")
+            try execute("CREATE TABLE IF NOT EXISTS info (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            let identity = archiveID.uuidString + ":1"
+            let oldIdentity = try rows("SELECT value FROM info WHERE key='identity'").first?.first
+            if oldIdentity != identity {
+                try execute("DROP TABLE IF EXISTS content")
+                try execute("DROP TABLE IF EXISTS documents")
+                try execute("DROP TABLE IF EXISTS collections")
+                try execute("DELETE FROM info")
+            }
+            try execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, title TEXT NOT NULL, imported REAL NOT NULL, bytes INTEGER NOT NULL, trashed INTEGER NOT NULL, favorite INTEGER NOT NULL, inbox INTEGER NOT NULL)")
+            try execute("CREATE INDEX IF NOT EXISTS document_date ON documents(trashed, imported DESC, id)")
+            try execute("CREATE INDEX IF NOT EXISTS document_title ON documents(trashed, title COLLATE NOCASE, id)")
+            try execute("CREATE TABLE IF NOT EXISTS collections (documentID TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(name, documentID))")
+            try execute("CREATE INDEX IF NOT EXISTS collection_document ON collections(documentID)")
+            try execute("CREATE VIRTUAL TABLE IF NOT EXISTS content USING fts5(title, correspondent, metadata, body, tokenize='unicode61 remove_diacritics 2', prefix='2 3 4')")
+            try execute("INSERT OR REPLACE INTO info VALUES ('identity', ?)", [identity])
+        } catch { sqlite3_close(database); database = nil; throw error }
+    }
+    deinit { sqlite3_close(database) }
+    private func failure(_ code: Int32) -> Failure {
+        Failure(code: code, message: database.map { String(cString: sqlite3_errmsg($0)) } ?? "Could not open database.")
+    }
+    @discardableResult private func statement<T>(_ sql: String, _ values: [String], _ body: (OpaquePointer) throws -> T) throws -> T {
+        var pointer: OpaquePointer?
+        let code = sqlite3_prepare_v2(database, sql, -1, &pointer, nil)
+        guard code == SQLITE_OK, let pointer else { throw failure(code) }
+        defer { sqlite3_finalize(pointer) }
+        for (index, value) in values.enumerated() {
+            let bound = sqlite3_bind_text(pointer, Int32(index + 1), value, -1, transient)
+            guard bound == SQLITE_OK else { throw failure(bound) }
+        }
+        return try body(pointer)
+    }
+    func execute(_ sql: String, _ values: [String] = []) throws {
+        try statement(sql, values) { pointer in
+            var code = sqlite3_step(pointer)
+            while code == SQLITE_ROW { code = sqlite3_step(pointer) }
+            guard code == SQLITE_DONE else { throw failure(code) }
+        }
+    }
+    func rows(_ sql: String, _ values: [String] = []) throws -> [[String]] {
+        try statement(sql, values) { pointer in
+            var result: [[String]] = []
+            var code = sqlite3_step(pointer)
+            while code == SQLITE_ROW {
+                result.append((0..<sqlite3_column_count(pointer)).map { column in
+                    sqlite3_column_text(pointer, column).map { String(cString: $0) } ?? ""
+                })
+                code = sqlite3_step(pointer)
+            }
+            guard code == SQLITE_DONE else { throw failure(code) }
+            return result
+        }
+    }
+    var isBuilt: Bool { get throws { try !rows("SELECT value FROM info WHERE key='built'").isEmpty } }
+    func finishBuild() throws { try execute("INSERT OR REPLACE INTO info VALUES ('built','yes')") }
+    func reset() throws {
+        try transaction {
+            try execute("DELETE FROM content")
+            try execute("DELETE FROM collections")
+            try execute("DELETE FROM documents")
+            try execute("DELETE FROM info WHERE key='built'")
+        }
+    }
+    func transaction(_ work: () throws -> Void) throws {
+        try execute("BEGIN IMMEDIATE")
+        do { try work(); try execute("COMMIT") }
+        catch { try? execute("ROLLBACK"); throw error }
+    }
+    func replace(_ document: HouseholdDocument, body: String, failed: Bool) throws {
+        let id = document.id.uuidString
+        try remove(id)
+        try execute("INSERT INTO documents(id,title,imported,bytes,trashed,favorite,inbox) VALUES(?,?,?,?,?,?,?)", [id, document.title, String(document.importedAt.timeIntervalSince1970), String(document.fileSize), document.trashedAt == nil ? "0" : "1", document.favorite ? "1" : "0", document.needsReview || failed ? "1" : "0"])
+        let rowID = sqlite3_last_insert_rowid(database)
+        try execute("INSERT INTO content(rowid,title,correspondent,metadata,body) VALUES(?,?,?,?,?)", [String(rowID), document.title, document.correspondent, document.searchableText, body])
+        for name in document.collections { try execute("INSERT INTO collections VALUES(?,?)", [id, name]) }
+    }
+    func remove(_ id: String) throws {
+        try execute("DELETE FROM content WHERE rowid IN (SELECT rowid FROM documents WHERE id=?)", [id])
+        try execute("DELETE FROM collections WHERE documentID=?", [id])
+        try execute("DELETE FROM documents WHERE id=?", [id])
+    }
+    func statistics() throws -> LibraryStatistics {
+        let row = try rows("SELECT count(*), coalesce(sum(CASE WHEN trashed=0 AND inbox=1 THEN 1 ELSE 0 END),0), coalesce(sum(trashed),0), coalesce(sum(bytes),0) FROM documents")[0]
+        return LibraryStatistics(documents: Int(row[0]) ?? 0, inbox: Int(row[1]) ?? 0, trash: Int(row[2]) ?? 0, bytes: Int64(row[3]) ?? 0)
+    }
+    func search(_ query: String, destination: LibraryDestination?, newestFirst: Bool, offset: Int, limit: Int) throws -> (rows: [[String]], total: Int) {
+        let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let expression = SearchQuery.expression(query)
+        if searching && expression == nil { return ([], 0) }
+        var filters = [destination == .trash ? "d.trashed=1" : "d.trashed=0"]
+        var values: [String] = []
+        switch destination {
+        case .inbox: filters.append("d.inbox=1")
+        case .favorites: filters.append("d.favorite=1")
+        case .collection(let name):
+            filters.append("EXISTS (SELECT 1 FROM collections c WHERE c.documentID=d.id AND c.name=?)"); values.append(name)
+        default: break
+        }
+        if searching { filters.append("content MATCH ?"); values.append(expression!) }
+        // FTS must drive the join, including count(*). With an ordinary JOIN SQLite can
+        // scan the active-document index and rerun MATCH for every document (quadratic).
+        let from = (searching ? " FROM content CROSS JOIN documents d ON content.rowid=d.rowid" : " FROM documents d") + " WHERE " + filters.joined(separator: " AND ")
+        let total = Int(try rows("SELECT count(*)" + from, values)[0][0]) ?? 0
+        let snippet = searching ? "snippet(content,-1,'\u{E000}','\u{E001}','…',24)" : "''"
+        let order = searching ? "bm25(content,10.0,5.0,2.0,1.0),d.imported DESC,d.id" : (newestFirst ? "d.imported DESC,d.id" : "d.title COLLATE NOCASE,d.id")
+        // Rank/limit before generating snippets. Otherwise SQLite can render snippets for
+        // every candidate while maintaining its sort, making broad queries very expensive.
+        let selected = try rows("SELECT d.id,d.rowid" + from + " ORDER BY " + order + " LIMIT ? OFFSET ?", values + [String(limit), String(offset)])
+        let result = try selected.map { row -> [String] in
+            guard searching else { return [row[0], ""] }
+            let excerpt = try rows("SELECT " + snippet + " FROM content WHERE rowid=? AND content MATCH ?", [row[1], expression!]).first?.first ?? ""
+            return [row[0], excerpt]
+        }
+        return (result, total)
+    }
+}

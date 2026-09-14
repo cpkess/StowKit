@@ -59,6 +59,7 @@ struct HouseholdDocument: Identifiable, Equatable, Codable, Sendable {
     var formatLabel: String { URL(fileURLWithPath: originalFilename).pathExtension.uppercased() }
     var searchableText: String {
         ([title, originalFilename, correspondent, summary, tags, entities,
-          documentDate.formatted(date: .abbreviated, time: .omitted)] + collections.sorted()).joined(separator: " ")
+          documentDate.formatted(date: .abbreviated, time: .omitted),
+          documentDate.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits).locale(Locale(identifier: "en_US_POSIX")))] + collections.sorted()).joined(separator: " ")
     }
 }

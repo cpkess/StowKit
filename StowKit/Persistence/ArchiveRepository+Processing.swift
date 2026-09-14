@@ -18,24 +18,6 @@ extension ArchiveRepository {
     func processingSnapshots() throws -> [UUID: ProcessingSnapshot] {
         Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<Job>()).map { ($0.documentID, $0.snapshot) })
     }
-    /// Called once on launch after import recovery. Only metadata is read, never originals.
-    func recoverProcessingQueue() throws {
-        let records = try documents()
-        let jobs = try context.fetch(FetchDescriptor<Job>())
-        let known = Set(jobs.map(\.documentID))
-        let trashed = Set(records.filter { $0.trashedAt != nil }.map(\.id))
-        for document in records where !known.contains(document.id) {
-            context.insert(Job(documentID: document.id, paused: document.trashedAt != nil))
-        }
-        for job in jobs {
-            let state = job.snapshot.state
-            if state.isActive || state == .queued || state == .paused {
-                job.state = trashed.contains(job.documentID) ? ProcessingState.paused.rawValue : ProcessingState.queued.rawValue
-                job.updatedAt = Date()
-            }
-        }
-        if context.hasChanges { try save() }
-    }
     func nextProcessingJob() throws -> ProcessingSnapshot? {
         let queued = ProcessingState.queued.rawValue
         var descriptor = FetchDescriptor<Job>(predicate: #Predicate { $0.state == queued }, sortBy: [SortDescriptor(\.createdAt)])
@@ -49,6 +31,7 @@ extension ArchiveRepository {
         job.lastError = error
         job.state = state.rawValue
         job.updatedAt = Date()
+        markSearchChanged(id)
         try save()
         return job.snapshot
     }
@@ -60,6 +43,7 @@ extension ArchiveRepository {
         guard job.completedPages <= count else { throw ProcessingError.invalidCheckpoint }
         job.pageCount = count
         job.updatedAt = Date()
+        markSearchChanged(id)
         try save()
         return job.snapshot
     }
@@ -74,6 +58,7 @@ extension ArchiveRepository {
         if result.method == .ocr { job.ocrPages += 1 }
         job.state = ProcessingState.extractingText.rawValue
         job.updatedAt = Date()
+        markSearchChanged(id)
         try save()
         return job.snapshot
     }
@@ -87,6 +72,7 @@ extension ArchiveRepository {
         }
         job.state = document.trashedAt == nil ? ProcessingState.queued.rawValue : ProcessingState.paused.rawValue
         job.lastError = nil; job.failedStage = nil; job.updatedAt = Date()
+        markSearchChanged(id)
         try save()
         return job.snapshot
     }
@@ -102,5 +88,15 @@ enum ProcessingError: LocalizedError {
         case .unreadablePage: "This page could not be read. Your original remains archived; retry text extraction when it is available."
         case .missingOriginal: "The archived original is unavailable. Restore the original file from your backup, then retry."
         }
+    }
+}
+
+extension ArchiveRepository {
+    func processingOverview(ids: [UUID]) throws -> (snapshots: [UUID: ProcessingSnapshot], pending: Int) {
+        let extracting = "extractingText", saving = "savingText", queued = "queued"
+        let descriptor = FetchDescriptor<Job>(predicate: #Predicate { ids.contains($0.documentID) || $0.state == extracting || $0.state == saving })
+        let snapshots = Dictionary(uniqueKeysWithValues: try context.fetch(descriptor).map { ($0.documentID, $0.snapshot) })
+        let pending = try context.fetchCount(FetchDescriptor<Job>(predicate: #Predicate { $0.state == queued || $0.state == extracting || $0.state == saving }))
+        return (snapshots, pending)
     }
 }

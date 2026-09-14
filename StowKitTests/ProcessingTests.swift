@@ -43,7 +43,9 @@ import UniformTypeIdentifiers
         XCTAssertEqual(try migrated.documents(), [document])
         XCTAssertEqual(migrated.archiveID, document.archiveID)
         XCTAssertTrue(try migrated.collections().contains { $0.name == "Custom" })
-        try migrated.recoverProcessingQueue()
+        let migratedContainer = migrated.container
+        let migrationService = await Task.detached { TextSearchService(modelContainer: migratedContainer) }.value
+        try await migrationService.recoverProcessingQueue()
         XCTAssertEqual(try migrated.processingJob(document.id)?.snapshot.state, .queued)
         XCTAssertEqual(try migrated.processingSnapshots().count, 1)
         let hash = try await oldStorage.hash(oldStorage.originalURL(for: document.relativePath))
@@ -98,8 +100,9 @@ import UniformTypeIdentifiers
         let service = await reader()
         let pages = try await service.pages(for: document.id)
         XCTAssertEqual(pages.map(\.method), [.embedded, .ocr])
-        let hits = try await service.matches(terms: ["water"])
-        XCTAssertEqual(hits["water"], [document.id])
+        try await service.configure(root: root, archiveID: repository.archiveID)
+        let hits = try await service.search("water", destination: .recent, newestFirst: true)
+        XCTAssertEqual(hits.hits.map(\.document.id), [document.id])
         XCTAssertFalse(document.searchableText.lowercased().contains("water"))
     }
 
@@ -135,7 +138,9 @@ import UniformTypeIdentifiers
         _ = try repository.savePage(document.id, index: 0, result: .init(text: "Already saved", method: .embedded))
         _ = try repository.setProcessingState(document.id, .savingText)
         let reopened = try ArchiveRepository(root: root)
-        try reopened.recoverProcessingQueue()
+        let recoveryContainer = reopened.container
+        let recoveryService = await Task.detached { TextSearchService(modelContainer: recoveryContainer) }.value
+        try await recoveryService.recoverProcessingQueue()
         let extractor = ScriptedExtractor()
         let processor = DocumentProcessor(repository: reopened, storage: storage, extractor: extractor)
         processor.start()
@@ -237,6 +242,7 @@ import UniformTypeIdentifiers
         let after = try await service.pages(for: document.id)
         XCTAssertEqual(after.count, 3)
         store.moveToTrash(document.id)
+        await store.waitForSearch()
         XCTAssertTrue(store.visibleDocuments.isEmpty)
     }
 

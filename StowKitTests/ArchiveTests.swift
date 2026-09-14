@@ -206,6 +206,7 @@ import UniformTypeIdentifiers
         store.enqueueImports([bad, source, source])
         let deadline = Date().addingTimeInterval(20)
         while store.isImporting && Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        await store.waitForSearch()
         XCTAssertFalse(store.isImporting)
         XCTAssertEqual(store.documents.count, 1)
         XCTAssertEqual(store.importReport?.duplicates, 1)
@@ -215,8 +216,10 @@ import UniformTypeIdentifiers
         document.tags = "house, 2026"
         store.update(document)
         store.moveToTrash(document.id)
+        await store.waitForSearch()
         XCTAssertTrue(store.visibleDocuments.isEmpty)
         store.destination = .trash
+        await store.waitForSearch()
         XCTAssertEqual(store.visibleDocuments.count, 1)
         store.restore(document.id)
         store.destination = .recent

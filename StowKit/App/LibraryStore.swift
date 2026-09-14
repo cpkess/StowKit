@@ -18,15 +18,15 @@ struct ImportReport: Identifiable {
 @MainActor @Observable
 final class LibraryStore {
     private(set) var documents: [HouseholdDocument] = []
-    var destination: LibraryDestination? = .recent
+    var destination: LibraryDestination? = .recent { didSet { selectedOverride = nil; refreshTextSearch() } }
     var selection: UUID?
-    var search = "" { didSet { refreshTextSearch() } }
+    var search = "" { didSet { selectedOverride = nil; refreshTextSearch() } }
     var errorMessage: String?
     private(set) var startupError: String?
     private(set) var isReady = false
     private(set) var isLoading = false
     private(set) var collections: [LibraryCollection] = []
-    var newestFirst = true
+    var newestFirst = true { didSet { refreshTextSearch() } }
     private(set) var isImporting = false
     private(set) var importProgress = ""
     private(set) var lastImportMessage = ""
@@ -35,7 +35,16 @@ final class LibraryStore {
     private(set) var isSearchingText = false
     private(set) var textSearchError: String?
     private(set) var textSearchService: TextSearchService?
-    private(set) var textMatches: [String: Set<UUID>] = [:]
+    private(set) var snippets: [UUID: String] = [:]
+    private(set) var totalResults = 0
+    private(set) var statistics = LibraryStatistics()
+    private(set) var pendingProcessingCount = 0
+    private(set) var isLoadingMore = false
+    private(set) var isRebuildingIndex = false
+    private var pageLimit = 50
+    var hasMore: Bool { documents.count < totalResults }
+    private var selectedOverride: HouseholdDocument?
+    var selectedDocument: HouseholdDocument? { documents.first { $0.id == selection } ?? (selectedOverride?.id == selection ? selectedOverride : nil) }
     @ObservationIgnored private var processor: DocumentProcessor?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var searchGeneration = 0
@@ -51,32 +60,17 @@ final class LibraryStore {
         storage = DocumentStorageManager(root: root)
         thumbnails = ThumbnailService(storage: storage)
     }
-    var inboxCount: Int { documents.filter { ($0.needsReview || processing[$0.id]?.state == .failed) && $0.trashedAt == nil }.count }
-    var pendingProcessingCount: Int { processing.values.filter { $0.state == .queued || $0.state.isActive }.count }
+    var inboxCount: Int { statistics.inbox }
+    var trashCount: Int { statistics.trash }
     var activeProcessing: ProcessingSnapshot? { processing.values.first { $0.state.isActive } }
-    private var searchTerms: [String] {
-        Array(Set(search.split(whereSeparator: \.isWhitespace).map { TextNormalization.searchKey(String($0)) })).sorted()
-    }
-    var trashCount: Int { documents.filter { $0.trashedAt != nil }.count }
-    var visibleDocuments: [HouseholdDocument] {
-        documents.filter { document in
-            let matchesDestination: Bool = switch destination {
-            case .trash: document.trashedAt != nil
-            case .inbox: document.trashedAt == nil && (document.needsReview || processing[document.id]?.state == .failed)
-            case .favorites: document.trashedAt == nil && document.favorite
-            case .collection(let name): document.trashedAt == nil && document.collections.contains(name)
-            default: document.trashedAt == nil
-            }
-            return matchesDestination && searchTerms.allSatisfy {
-                TextNormalization.searchKey(document.searchableText).contains($0) || textMatches[$0]?.contains(document.id) == true
-            }
-        }.sorted {
-            if newestFirst { return $0.importedAt == $1.importedAt ? $0.id.uuidString < $1.id.uuidString : $0.importedAt > $1.importedAt }
-            return $0.title.localizedStandardCompare($1.title) == .orderedAscending
-        }
+    var visibleDocuments: [HouseholdDocument] { documents }
+    private func refreshProcessingOverview() {
+        guard let overview = try? repository?.processingOverview(ids: documents.map(\.id)) else { return }
+        processing = overview.snapshots
+        pendingProcessingCount = overview.pending
     }
     func reconcileSelection() {
-        if !visibleDocuments.contains(where: { $0.id == selection }) { selection = visibleDocuments.first?.id }
+        if !isSearchingText && selectedDocument == nil { selection = visibleDocuments.first?.id }
     }
     func start() async {
         guard !isReady, !isLoading else { return }
@@ -95,50 +89,59 @@ final class LibraryStore {
             } catch {
                 errorMessage = "Some interrupted imports need attention. Their recovery files have been kept.\n\n\(error.localizedDescription)"
             }
-            documents = try repository.documents()
             collections = try repository.collections()
-            try repository.recoverProcessingQueue()
-            processing = try repository.processingSnapshots()
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
+            do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }
+            catch { textSearchError = error.localizedDescription }
+            try await textSearchService?.recoverProcessingQueue()
+            refreshProcessingOverview()
             processor = DocumentProcessor(repository: repository, storage: storage, onUpdate: { [weak self] snapshot in
                 self?.processing[snapshot.id] = snapshot
-                if snapshot.state == .complete || snapshot.state == .failed { self?.refreshTextSearch() }
+                if snapshot.state == .complete || snapshot.state == .failed || snapshot.state == .paused {
+                    self?.refreshProcessingOverview()
+                }
+                if snapshot.state == .complete || snapshot.state == .failed { self?.refreshTextSearch(resetLimit: false) }
             }, onError: { [weak self] message in self?.errorMessage = message })
             isReady = true
             if processingEnabled { processor?.start() }
             refreshTextSearch()
+            await waitForSearch()
             reconcileSelection()
         } catch { startupError = error.localizedDescription }
     }
 
     func binding(for document: HouseholdDocument) -> Binding<HouseholdDocument> {
-        Binding(get: { self.documents.first(where: { $0.id == document.id }) ?? document }, set: { self.update($0) })
+        Binding(get: { self.documents.first(where: { $0.id == document.id }) ?? (self.selectedOverride?.id == document.id ? self.selectedOverride! : document) }, set: { self.update($0) })
     }
     func update(_ document: HouseholdDocument) {
-        guard let repository, let index = documents.firstIndex(where: { $0.id == document.id }) else { return }
+        guard let repository else { return }
         var edited = document
         edited.modifiedAt = Date()
         do {
             try repository.update(edited)
-            documents[index] = edited
+            if let index = documents.firstIndex(where: { $0.id == document.id }) { documents[index] = edited }
+            if selectedOverride?.id == document.id {
+                selectedOverride = (edited.trashedAt != nil) == (destination == .trash) ? edited : nil
+            }
+            refreshTextSearch(resetLimit: false)
             if let snapshot = try repository.processingJob(document.id)?.snapshot { processing[document.id] = snapshot }
             if processingEnabled { processor?.start() }
             reconcileSelection()
         } catch { errorMessage = "Your change could not be saved.\n\n\(error.localizedDescription)" }
     }
     func toggleFavorite(_ id: UUID) {
-        guard var document = documents.first(where: { $0.id == id }) else { return }
+        guard var document = (try? repository?.document(id)) else { return }
         document.favorite.toggle()
         update(document)
     }
     func moveToTrash(_ id: UUID) {
-        guard var document = documents.first(where: { $0.id == id }) else { return }
+        guard var document = (try? repository?.document(id)) else { return }
         document.trashedAt = Date()
         update(document)
     }
     func restore(_ id: UUID) {
-        guard var document = documents.first(where: { $0.id == id }) else { return }
+        guard var document = (try? repository?.document(id)) else { return }
         document.trashedAt = nil
         update(document)
     }
@@ -154,9 +157,10 @@ final class LibraryStore {
         } catch { errorMessage = error.localizedDescription; return false }
     }
     func showDocument(_ id: UUID) {
-        guard let document = documents.first(where: { $0.id == id }) else { return }
+        guard let document = (try? repository?.document(id)) else { return }
         destination = document.trashedAt == nil ? .recent : .trash
         search = ""
+        selectedOverride = document
         selection = id
     }
     func openCopy(_ document: HouseholdDocument) {
@@ -187,19 +191,21 @@ final class LibraryStore {
                         report.issues.append(ImportIssue(filename: url.lastPathComponent,
                             message: result.document.trashedAt == nil ? "Already in your library as “\(result.document.title)”." : "Already in Trash as “\(result.document.title)”. Restore it from Trash.", documentID: result.document.id))
                     } else {
-                        documents.insert(result.document, at: 0)
                         if let snapshot = try repository?.processingJob(result.document.id)?.snapshot { processing[result.document.id] = snapshot }
                         if processingEnabled { processor?.start() }
                         report.imported += 1
                         // Imports always appear in Inbox until manually reviewed; no AI is implied.
                         destination = .inbox
                         search = ""
+                        selectedOverride = result.document
                         selection = result.document.id
                     }
                 } catch {
                     report.issues.append(ImportIssue(filename: url.lastPathComponent, message: error.localizedDescription))
                 }
             }
+            refreshProcessingOverview()
+            refreshTextSearch()
             isImporting = false
             importProgress = ""
             lastImportMessage = "Imported \(report.imported) \(report.imported == 1 ? "document" : "documents")"
@@ -214,28 +220,77 @@ final class LibraryStore {
             if processingEnabled { processor?.start() }
         } catch { errorMessage = error.localizedDescription }
     }
-    func refreshTextSearch() {
+    func waitForSearch() async {
+        while let task = searchTask {
+            let generation = searchGeneration
+            await task.value
+            if generation == searchGeneration { return }
+        }
+    }
+    func loadMore() {
+        guard hasMore, !isSearchingText else { return }
+        pageLimit += 50
+        isLoadingMore = true
+        refreshTextSearch(resetLimit: false)
+    }
+    func rebuildSearchIndex() {
+        guard let service = textSearchService, !isRebuildingIndex else { return }
+        isRebuildingIndex = true
+        searchTask?.cancel()
+        searchGeneration += 1
+        searchTask = Task {
+            do { try await service.rebuild() }
+            catch {
+                isRebuildingIndex = false
+                isSearchingText = false
+                textSearchError = error.localizedDescription
+                return
+            }
+            isRebuildingIndex = false
+            refreshTextSearch()
+        }
+    }
+    func refreshTextSearch(resetLimit: Bool = true) {
+        guard !isRebuildingIndex else { return }
         searchTask?.cancel()
         searchGeneration += 1
         let generation = searchGeneration
-        let terms = searchTerms
-        textMatches = [:]
+        if resetLimit { pageLimit = 50 }
+        let query = search, scope = destination, sort = newestFirst, limit = pageLimit
         textSearchError = nil
-        guard let service = textSearchService, !terms.isEmpty else { isSearchingText = false; return }
+        guard let service = textSearchService, isReady, !isRebuildingIndex else { isSearchingText = false; return }
         isSearchingText = true
         searchTask = Task {
             do {
                 try await Task.sleep(for: .milliseconds(150))
-                let matches = try await service.matches(terms: terms)
+                let page = try await service.search(query, destination: scope, newestFirst: sort, limit: limit)
                 guard !Task.isCancelled, searchGeneration == generation else { return }
-                textMatches = matches
+                documents = page.hits.map(\.document)
+                snippets = Dictionary(uniqueKeysWithValues: page.hits.map { ($0.document.id, $0.snippet) })
+                totalResults = page.total
+                statistics = page.statistics
+                refreshProcessingOverview()
                 isSearchingText = false
+                isLoadingMore = false
                 reconcileSelection()
             } catch is CancellationError { }
             catch {
                 guard searchGeneration == generation else { return }
                 isSearchingText = false
-                textSearchError = "Document text could not be searched. Metadata results are shown."
+                isLoadingMore = false
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   let page = try? await service.browse(destination: scope, newestFirst: sort, limit: limit), searchGeneration == generation {
+                    documents = page.hits.map(\.document)
+                    snippets = [:]
+                    totalResults = page.total
+                    refreshProcessingOverview()
+                    reconcileSelection()
+                }
+                guard searchGeneration == generation else { return }
+                if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    documents = []; snippets = [:]; totalResults = 0
+                }
+                textSearchError = "Search unavailable. \(error.localizedDescription) Use Rebuild Search Index in Settings to try again."
             }
         }
     }

@@ -10,7 +10,7 @@ import SwiftData
 
     init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV2.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV3.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])
@@ -49,6 +49,7 @@ import SwiftData
         guard try matching(hash: document.contentHash) == nil else { throw ArchiveError.duplicate }
         context.insert(Record(document))
         context.insert(ArchiveSchemaV2.ProcessingJobRecord(documentID: document.id, paused: document.trashedAt != nil))
+        markSearchChanged(document.id)
         try save()
     }
     func update(_ document: HouseholdDocument) throws {
@@ -65,6 +66,7 @@ import SwiftData
                 job.updatedAt = Date()
             }
         }
+        markSearchChanged(document.id)
         try save()
     }
     func addCollection(_ name: String) throws -> LibraryCollection {
