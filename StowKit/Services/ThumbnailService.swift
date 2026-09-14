@@ -7,17 +7,17 @@ actor ThumbnailService {
     let storage: DocumentStorageManager
     init(storage: DocumentStorageManager) { self.storage = storage }
 
-    func thumbnail(for document: HouseholdDocument) throws -> Data {
+    func thumbnail(for document: HouseholdDocument) async throws -> Data {
         let cache = storage.thumbnailURL(for: document.id)
         if let data = try? Data(contentsOf: cache) { return data }
-        let original = try storage.originalURL(for: document.relativePath)
+        let original = try await storage.localOriginal(for: document)
         let data = try render(url: original, isImage: document.isImage, maxPixelSize: 160)
         try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: cache, options: .atomic)
         return data
     }
-    func imagePreview(for document: HouseholdDocument) throws -> Data {
-        try render(url: storage.originalURL(for: document.relativePath), isImage: true, maxPixelSize: 2048)
+    func imagePreview(for document: HouseholdDocument) async throws -> Data {
+        try render(url: await storage.localOriginal(for: document), isImage: true, maxPixelSize: 2048)
     }
     private func render(url: URL, isImage: Bool, maxPixelSize: Int) throws -> Data {
         let image: CGImage

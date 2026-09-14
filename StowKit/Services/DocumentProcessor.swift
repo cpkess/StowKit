@@ -39,7 +39,7 @@ import Foundation
                         continue
                     }
                     onUpdate(try repository.setProcessingState(id, .extractingText))
-                    let input = ExtractionInput(documentID: id, url: try storage.originalURL(for: document.relativePath), isImage: document.isImage)
+                    let input = ExtractionInput(documentID: id, url: try await storage.localOriginal(for: document), isImage: document.isImage)
                     let count = try await extractor.pageCount(for: input)
                     try Task.checkCancellation()
                     let checkpoint = try repository.setPageCount(id, count: count)

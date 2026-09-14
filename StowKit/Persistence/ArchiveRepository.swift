@@ -10,7 +10,7 @@ import SwiftData
 
     init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV4.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV5.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])
@@ -51,7 +51,8 @@ import SwiftData
         context.insert(ArchiveSchemaV4.AnalysisRecord(document.id))
         context.insert(ArchiveSchemaV2.ProcessingJobRecord(documentID: document.id, paused: document.trashedAt != nil))
         markSearchChanged(document.id)
-        try save()
+        do { try journalDocument(document); try save() }
+        catch { context.rollback(); throw error }
     }
     func update(_ document: HouseholdDocument) throws {
         let id = document.id
@@ -69,7 +70,8 @@ import SwiftData
             }
         }
         markSearchChanged(document.id)
-        try save()
+        do { try journalDocument(document); try save() }
+        catch { context.rollback(); throw error }
     }
     func addCollection(_ name: String) throws -> LibraryCollection {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,7 +80,8 @@ import SwiftData
         }
         let collection = LibraryCollection(name: trimmed, symbol: "folder")
         context.insert(ArchiveSchemaV1.CollectionRecord(collection))
-        try save()
+        do { try journalCollection(collection); try save() }
+        catch { context.rollback(); throw error }
         return collection
     }
     func save() throws {

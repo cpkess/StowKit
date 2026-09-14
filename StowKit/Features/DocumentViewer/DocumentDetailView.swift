@@ -17,6 +17,7 @@ struct DocumentDetailView: View {
     let applyAnalysis: () -> Void
     @State private var showDetails = true
     @State private var quickLookURL: URL?
+    @State private var originalError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,7 +112,13 @@ struct DocumentDetailView: View {
                 }.help(document.favorite ? "Remove from Favorites" : "Add to Favorites")
                 Button(action: openCopy) { Label("Open a Copy", systemImage: "arrow.up.forward.app") }
                     .keyboardShortcut("o").help("Open a Copy (⌘O) — keeps the archived original unchanged")
-                Button { quickLookURL = try? storage.originalURL(for: document.relativePath) } label: { Label("Quick Look", systemImage: "eye") }
+                Button {
+                    let selected = document
+                    Task {
+                        do { quickLookURL = try await storage.localOriginal(for: selected) }
+                        catch { originalError = error.localizedDescription }
+                    }
+                } label: { Label("Quick Look", systemImage: "eye") }
                     .help("Quick Look")
                 Button(action: trashOrRestore) {
                     Label(document.trashedAt == nil ? "Move to Trash" : "Restore", systemImage: document.trashedAt == nil ? "trash" : "arrow.uturn.backward")
@@ -120,6 +127,9 @@ struct DocumentDetailView: View {
             }
         }
         .quickLookPreview($quickLookURL)
+        .alert("Unable to Open Original", isPresented: Binding(get: { originalError != nil }, set: { if !$0 { originalError = nil } })) {
+            Button("OK") { originalError = nil }
+        } message: { Text(originalError ?? "") }
     }
 
     private var preview: some View {
@@ -181,7 +191,7 @@ private struct DocumentPreview: View {
                     guard let decoded = NSImage(data: data) else { throw ArchiveError.invalidDocument }
                     image = decoded
                 } else {
-                    let url = try storage.originalURL(for: document.relativePath)
+                    let url = try await storage.localOriginal(for: document)
                     let loaded = try await Task.detached(priority: .userInitiated) {
                         guard let loaded = PDFDocument(url: url) else { throw ArchiveError.invalidDocument }
                         return loaded

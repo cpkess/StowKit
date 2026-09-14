@@ -60,7 +60,8 @@ extension ArchiveRepository {
         job.resultData = try JSONEncoder().encode(result)
         job.state = "complete"; job.error = nil; job.updatedAt = Date()
         markSearchChanged(id)
-        try save()
+        do { try journalDocument(document); try save() }
+        catch { context.rollback(); throw error }
     }
     func acceptAnalysis(_ id: UUID) throws {
         guard let job = try analysis(id), let result = job.snapshot.result, let document = try document(id), document.trashedAt == nil else { return }

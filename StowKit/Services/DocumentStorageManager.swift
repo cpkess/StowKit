@@ -41,6 +41,18 @@ actor DocumentStorageManager {
               !relativePath.contains("..") else { throw ArchiveError.unsafePath }
         return root.appendingPathComponent(relativePath)
     }
+    /// Consumer boundary for originals. Future downloads/leases belong here.
+    /// Import already verifies hashes; opening checks presence/type/size without rehashing each preview.
+    func localOriginal(for document: HouseholdDocument) throws -> URL {
+        let url = try originalURL(for: document.relativePath)
+        guard files.fileExists(atPath: url.path) else { throw OriginalAccessError.missing }
+        let attributes = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        guard attributes.isRegularFile == true, Int64(attributes.fileSize ?? -1) == document.fileSize else {
+            throw ArchiveError.recoveryMismatch
+        }
+        return url
+    }
+
     nonisolated func thumbnailURL(for id: UUID) -> URL {
         root.appendingPathComponent("Thumbnails/\(id.uuidString).png")
     }
@@ -194,12 +206,20 @@ actor DocumentStorageManager {
     }
 
     func prepareOpenCopy(_ document: HouseholdDocument) throws -> URL {
-        let original = try originalURL(for: document.relativePath)
+        let original = try localOriginal(for: document)
         let directory = files.temporaryDirectory.appendingPathComponent("StowKit-Open/\(UUID().uuidString)", isDirectory: true)
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(URL(fileURLWithPath: document.originalFilename).lastPathComponent)
         try files.copyItem(at: original, to: url)
         try files.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         return url
+    }
+}
+
+
+enum OriginalAccessError: LocalizedError {
+    case missing
+    var errorDescription: String? {
+        "The archived original is missing from this Mac. Restore it from your backup. iCloud retrieval is not enabled yet."
     }
 }

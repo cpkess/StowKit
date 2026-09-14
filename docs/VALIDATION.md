@@ -1,5 +1,13 @@
 # Validation
 
+## Local sync foundation
+
+Validated September 14, 2026 with Xcode 26.3 / Swift 6.2.4 on macOS 15.7.3, Apple Silicon. The Debug suite passed **70 tests with zero failures**, including all prior 57 tests and 13 new sync tests. The Release build also succeeded.
+
+New coverage includes persisted/coalesced snapshots across restart; exact-operation acknowledgments preserving newer edits; unchanged-edit suppression; stable collection IDs and explicit membership removals; journal failure rolling back metadata, manual protections, and search receipts; automatic versus explicitly accepted metadata; fake delivery with a lost acknowledgment and idempotent retry; bounded batches and partial acknowledgment; manual/automatic and same-field conflict policies; Trash/Restore and membership merge behavior; V4 migration preserving document metadata, protected fields, saved OCR progress/text, and search receipts without historical upload enqueueing; and missing/wrong-size original rejection without deleting bytes.
+
+These are local tests with generated fixtures. The app does not instantiate the transport, contact CloudKit, upload documents, or evict originals. Fake transport tests establish receipt behavior, not CloudKit save semantics. Incoming remote application, durable conflict resolution, collection alias migration, download leases, live account sharing, and metadata-only CloudKit fetches remain unverified/unimplemented. No new interactive UI verification is claimed for this slice. The previously documented Core Data model-checksum and array-materialization diagnostics remain present; migration assertions and all tests pass.
+
 ## Milestone 6 architecture review
 
 Reviewed September 14, 2026. This milestone changes documentation only. The [iCloud architecture note](ICLOUD_ARCHITECTURE.md) was checked against the current local schemas, explicit `cloudKitDatabase: .none` configuration, import recovery, incremental search journal, and manual-analysis protections. Apple's CloudKit documentation and the installed Xcode 26.3 SDK informed the API choices; the SDK's CKSyncEngine fetch options do not expose asset-field projection.

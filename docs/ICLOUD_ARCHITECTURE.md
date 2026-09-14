@@ -2,6 +2,8 @@
 
 Proposed design, September 14, 2026. This milestone changes documentation only. The shipping implementation remains local, with SwiftData CloudKit integration explicitly disabled. No container, entitlement, account, share, upload, or cache eviction is created by this note.
 
+Implementation follow-up: the first local portion of step 1 now exists. See [current implementation](ARCHITECTURE.md) and [validation](VALIDATION.md) for the V5 receipt journal, collection identity bridge, merge-policy tests, and original access boundary. The full design below remains a target; incoming sync, historical backfill, account binding, full collection normalization, and conflict persistence are not implemented yet.
+
 ## Decision
 
 Use an explicit CloudKit transport over the existing local archive. Each household occupies one custom record zone in its owner's private database. A zone-wide, invitation-only `CKShare` grants household members access through their shared databases. Keep SwiftData, originals, and the rebuildable SQLite search index on each Mac; never synchronize a SQLite store or its sidecars through iCloud Drive.
