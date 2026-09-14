@@ -2,20 +2,22 @@
 
 ## Current scope
 
-Milestone 4 adds a local SQLite FTS5 index, ranked search, highlighted snippets, and bounded library loading to the native archive and OCR pipeline. Manual organization remains available throughout processing. AI classification, CloudKit, and household sharing remain unimplemented. All processing stays on this Mac.
+Milestone 5 adds resumable document understanding to the native archive, OCR pipeline, and full-text index. Manual organization remains available throughout processing. CloudKit and household sharing remain unimplemented. All processing stays on this Mac.
 
 ## Project structure
 
 - `App/LibraryStore.swift`: observable presentation state, navigation, a sequential import queue, persistent metadata edits, and native drop-provider delivery.
 - `App/StowKitApp.swift`: one shared library window, search commands, and minimal Settings.
 - `Models/Document.swift`: Sendable value snapshots, navigation, and collection definitions. SwiftUI does not own SwiftData models or file-storage decisions.
-- `Persistence/ArchiveSchema.swift`: frozen V1 document, collection, and archive models plus the migration-plan entry point. `ProcessingSchema.swift` adds V2 job and page-text tables through a lightweight migration; V1 document fields remain unchanged. `SearchSchema.swift` adds V3 append-only index receipts and a migration-maintenance marker; V2 page and job fields also remain unchanged.
+- `Persistence/ArchiveSchema.swift`: frozen V1 document, collection, and archive models plus the migration-plan entry point. `ProcessingSchema.swift` adds V2 job and page-text tables through a lightweight migration; V1 document fields remain unchanged. `SearchSchema.swift` adds V3 append-only index receipts and a migration-maintenance marker; V2 page and job fields also remain unchanged. `IntelligenceSchema.swift` adds V4 analysis jobs, proposals, field protections, and revision counters without changing any older model.
 - `Persistence/ArchiveRepository.swift`: explicit metadata transactions. Autosave is disabled; failed saves roll back and are reported. Existing records are checked before insertion to avoid SwiftData unique-attribute upserts silently changing documents.
 - `Services/DocumentStorageManager.swift`: actor-isolated file coordination, chunked copying/hashing, validation, recovery receipts, promotion, and external working copies.
 - `Services/DocumentImporter.swift`: joins file and metadata commits and reports duplicates, including documents in Trash.
 - `Services/ThumbnailService.swift`: background ImageIO/Core Graphics rendering, small cached thumbnails, and downsampled image previews.
 - `Persistence/ArchiveRepository+Processing.swift`: durable job transitions, migration backfill, per-page checkpoint transactions, and retry/reset operations.
 - `Services/DocumentProcessor.swift`: one-job-at-a-time orchestration with cancellation, per-job failure isolation, and Trash-aware pausing.
+- `Services/DocumentIntelligenceProcessor.swift`: independent durable analysis worker, cancellation/recovery, and stale-result checks.
+- `Intelligence/`: provider protocol, typed proposals, filing policy, Apple on-device provider, and deterministic fallback.
 - `Services/OCRService.swift`: actor-confined PDF parsing, rasterization, and Vision requests behind `DocumentTextExtractor`.
 - `Services/TextSearchService.swift`: background model actor for bounded source reads, processing migration recovery, incremental index synchronization, search, fallback browsing, and extracted-text inspection.
 - `Services/FullTextIndex.swift`: system SQLite FTS5 connection, transactions, weighted ranking, scoped queries, snippets, and rebuildable cache schema. No package dependency.
@@ -42,7 +44,7 @@ Each document stores its UUID, stable archive UUID, immutable source identity, f
 
 The current library uses one local household archive identity. It is not a CloudKit zone or authentication identity. Metadata edits and Trash transitions save synchronously as small SwiftData transactions on the main actor. Large file copying, hashing, image decoding/downsampling, and thumbnail generation run on service actors. PDF loading occurs in a detached task, with presentation handled by PDFKit.
 
-Text extraction does not classify metadata: new records need manual review, titles come from filenames, and the initial document date is the import date until edited. OCR text is stored for retrieval, but importing does not parse dates or amounts into metadata fields.
+Text extraction and classification remain separate. New records begin in Inbox, with filename titles and import-date document dates. Understanding runs after successful extraction and may file a document. Dates and amounts are not parsed into metadata in this milestone.
 
 ## Deletion and original protection
 
@@ -82,8 +84,24 @@ PDF pages with enough plausible embedded text use PDFKit text directly. Sparse o
 
 The inspector exposes progress, extracted page text, Copy All, Retry (resume), and Extract Again (reset derived text). Empty pages are successful results with no recognized text, while locked PDFs and missing/unreadable originals produce actionable errors. Neither OCR nor retry modifies originals or manual metadata. Completed text remains queryable after an extraction error. A document moved to Trash during an in-flight request stays paused even if that request fails; Restore resumes unfinished work.
 
+## Document understanding
+
+`DocumentIntelligenceProvider` consumes a Sendable document snapshot, bounded text, allowed collection names, and an excerpt flag. It returns a Codable `DocumentUnderstanding` containing title, document type, collection, correspondent, tags, summary, evidence, confidence, provider, and a status note. The rest of the archive does not depend directly on Foundation Models.
+
+`AppleFoundationModelProvider` is availability-gated to macOS 26 and uses `SystemLanguageModel.default`, a fresh session per document, `@Generable` structured output, temperature zero, and a 600-token response limit. There are no tools, remote providers, network entitlements, cloud-compute sessions, or automatic actions. The instructions treat document text as untrusted data and request factual extraction only. Model availability is checked before generation; refusal, context overflow, and other generation failures fall back to local rules. Cancellation propagates instead of triggering fallback.
+
+Apple documents a [4,096-token session context window](https://developer.apple.com/documentation/technotes/tn3193-managing-the-on-device-foundation-model-s-context-window). The source reader caps input at 4,000 UTF-8 bytes from up to eight pages and notes truncation. This is a byte budget, not a token-count guarantee: schema/prompt/output tokens also consume context. Overflow uses the fallback. Long documents are not silently treated as fully understood; truncated input caps confidence below the automatic-filing threshold. Chunked whole-document synthesis is future work.
+
+Local rules currently recognize property-tax bills, insurance policies, product warranties, tuition statements, vehicle registrations, purchase receipts, and bank statements. They use specific textual cues, avoid filename-only classification, and lower confidence for tied types. Rules are intentionally small; they are not a general-purpose classifier. Their summary describes the recognized type rather than inventing document details.
+
+Filing policy: scores at least 0.90 file automatically; 0.65–0.89 file with a visible Suggested filing label; lower scores retain Inbox review. Model-reported probabilities are not accepted. High model confidence requires agreement with independently matched rules. Allowed collection membership and a literal supporting quote are validated; unsupported correspondents are removed, output sizes are bounded, and nonfinite scores are rejected. These are heuristics rather than calibrated accuracy guarantees or proof of factual correctness.
+
+Analysis jobs are created atomically on import, wait for completed OCR, then progress queued → analyzing → complete/failed. OCR and analysis have independent workers, so analysis failure cannot prevent text extraction or search. A one-time, bounded V4 backfill creates jobs for existing records and protects every previously editable classification field. Interrupted analyzing jobs requeue on launch. Normal launch does not rescan all records after this marker exists.
+
+Manual changes permanently protect the corresponding title, summary, correspondent, collections, tags, or review flag from subsequent automatic merging. Protection records and edits save atomically. Completion re-reads current metadata and protections, so edits made during generation win. Applying the displayed suggestions is an explicit override and uses the normal metadata edit path. Empty suggestions do not clear existing values; collection suggestions add membership. Dates, entities, source identity, and original paths are outside the automatic merge.
+
+Trash and Extract Again increment the analysis revision. An in-flight result can commit only if its revision still matches, its job is analyzing, and its document is active. Restore requeues completed-text analysis; resetting OCR waits for new text. Result persistence, merged metadata, job completion, and the search receipt share one SwiftData transaction. The full-text index then observes applied metadata through its existing journal.
+
 ## Next milestone
 
-Milestone 5 adds on-device intelligence with a deterministic fallback. Keep the text-extraction service and its durable queue independent of AI availability.
-
-Before cloud implementation, write a separate design covering private/shared CloudKit zones, CKShare membership, CKAsset originals, record ownership, conflicts, tombstones, asset verification, cache pins, and transfer recovery. SwiftData automatic CloudKit integration alone is not a household-sharing implementation. The local unique attributes and name-based memberships will need deliberate migration; sync remains disabled rather than being implied by the data model.
+Milestone 6 is an iCloud architecture note before synchronization code: cover private/shared CloudKit zones, CKShare membership, CKAsset originals, record ownership, conflicts, tombstones, asset verification, cache pins, and transfer recovery. SwiftData automatic CloudKit integration alone is not a household-sharing implementation. The local unique attributes and name-based memberships will need deliberate migration; synchronization remains disabled.

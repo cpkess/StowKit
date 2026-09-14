@@ -29,6 +29,7 @@ extension ArchiveRepository {
         if state == .extractingText && job.state == ProcessingState.queued.rawValue { job.attempts += 1 }
         job.failedStage = state == .failed ? job.snapshot.state.label : nil
         job.lastError = error
+        if state == .complete { try queueAnalysis(id) }
         job.state = state.rawValue
         job.updatedAt = Date()
         markSearchChanged(id)
@@ -66,6 +67,7 @@ extension ArchiveRepository {
         guard let job = try processingJob(id), let document = try document(id) else { throw ArchiveError.missingRecord }
         guard !job.snapshot.state.isActive else { return job.snapshot }
         if restart {
+            try queueAnalysis(id, reset: true)
             let pages = try context.fetch(FetchDescriptor<Page>(predicate: #Predicate { $0.documentID == id }))
             for page in pages { context.delete(page) }
             job.completedPages = 0; job.pageCount = 0; job.characterCount = 0; job.ocrPages = 0

@@ -23,7 +23,7 @@ struct StowKitApp: App {
             Form {
                 Section("Local Archive") {
                     Text("Documents and metadata are stored on this Mac. Originals are preserved unchanged; opening a document creates a separate working copy.")
-                    Text("Trash is recoverable and continues to use disk space. Text extraction uses local PDF text and Vision OCR. iCloud sync and AI classification are not enabled yet.")
+                    Text("Trash is recoverable and continues to use disk space. Text extraction uses local PDF text and Vision OCR. Document understanding uses Apple’s on-device model when available, with local rules as a fallback. iCloud sync is not enabled.")
                         .foregroundStyle(.secondary)
                     LabeledContent("Documents", value: "\(library.statistics.documents)")
                     LabeledContent("Originals", value: ByteCountFormatter.string(fromByteCount: library.statistics.bytes, countStyle: .file))

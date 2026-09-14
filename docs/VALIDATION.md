@@ -1,10 +1,10 @@
-# Milestone 4 validation
+# Milestone 5 validation
 
 Validated on September 13, 2026 with Xcode 26.3 / Swift 6.2.4 on Apple Silicon.
 
 ## Automated checks
 
-The final run passed all 42 tests with zero failures (17 archive tests, 13 processing tests, and 12 search tests). Run the shared StowKit scheme's XCTest target using the README command. Tests create and remove their own temporary archives; they do not import personal documents.
+The final run passed all 56 tests with zero failures (17 archive, 13 processing, 12 search, and 14 intelligence tests). Run the shared StowKit scheme's XCTest target using the README command. Tests create and remove their own temporary archives; they do not import personal documents.
 
 Coverage:
 
@@ -60,7 +60,24 @@ Coverage:
 - Rapid query changes discard stale results; a duplicate-report selection can resolve outside the first page.
 - A real V2 store migrates to V3 without losing metadata, completed jobs, or saved page text. V1 migration also exercises the production background recovery path.
 
-## Synthetic index benchmark
+## Intelligence checks
+
+- High-confidence rule output files a document, updates search, and preserves source identity/path/date.
+- Medium-confidence output files; unknown text keeps the document in Inbox. Uncertain reanalysis returns a previously auto-filed document to review.
+- Manual edits, cleared summaries, collection choices, and review flags survive pending analysis.
+- An edit made while a provider is running wins at commit time.
+- Unknown collection names, absent evidence, fabricated issuers, and nonfinite confidence are rejected.
+- Long input is bounded and cannot auto-file based only on its excerpt.
+- Interrupted analysis requeues; accepting a displayed proposal persists through reopening.
+- Cancellation requeues without applying metadata.
+- OCR reset invalidates in-flight results; Trash pauses and Restore resumes analysis.
+- A failed provider does not block the next job or existing OCR search.
+- A real V3 archive migrates to V4 and retains protected metadata while receiving suggestions.
+- The production provider falls back successfully on macOS 15.7.3.
+
+The development Mac runs macOS 15.7.3. Foundation Models code builds against the installed macOS 26.2 SDK but its macOS 26 branch cannot execute here. Live Apple model generation, model refusal/context-overflow behavior, and output quality on an eligible macOS 26 Mac remain unverified. The provider test runs a synthetic Apple-model request when that API and model are available; on this host it exercised the production fallback instead. No generated output is claimed as tested Apple-model output.
+
+## Milestone 4 synthetic index benchmark
 
 Run from the repository root:
 
@@ -87,11 +104,11 @@ The cache was 447.3 MB, including stored text and FTS postings. These are optimi
 
 The benchmark caught an expensive SQLite count plan that repeated MATCH per document. The final query makes FTS drive the join and generates snippets only for the selected window.
 
-## Native UI status for Milestones 3 and 4
+## Native UI status for Milestones 3–5
 
-Native visual verification remains pending. Automatic approval review blocked UI inspection because the Mac had been confirmed locked and no unlock confirmation was received. Automated build, migration, repository, processing, full-text search, and real OCR tests ran successfully. No visual verification of progress, View Text, Copy All, Retry, snippets, or Load More is claimed.
+Native visual verification remains pending. Automatic approval review blocked UI inspection because the Mac had been confirmed locked and no unlock confirmation was received. Automated build, migration, repository, processing, full-text search, and real OCR tests ran successfully. No visual verification of progress, View Text, Copy All, Retry, snippets, Load More, or the new Suggestions/Analyze Again controls is claimed.
 
-When the desktop is available: import clearly marked scan/PDF fixtures, inspect extracted text, search an OCR-only phrase with ⌘K, verify highlighted snippets and scoped ⌘F, exercise Load More with a larger fixture library, and rebuild the index from Settings. Check metadata edits, Trash/Restore, and an existing duplicate outside the first page. Quit/relaunch during processing and confirm checkpoint recovery. Do not use personal records for the smoke test.
+When the desktop is available: import clearly marked scan/PDF fixtures, inspect extracted text, search an OCR-only phrase with ⌘K, verify highlighted snippets and scoped ⌘F, exercise Load More with a larger fixture library, and rebuild the index from Settings. Check metadata edits, Trash/Restore, and an existing duplicate outside the first page. For understanding, inspect the provider label and evidence, apply a proposal, verify Suggested filing versus Inbox, and confirm a manual title survives Analyze Again. Quit/relaunch during processing and confirm checkpoint recovery. Do not use personal records for the smoke test.
 
 ## Prior Milestone 2 native smoke test
 

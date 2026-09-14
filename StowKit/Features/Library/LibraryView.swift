@@ -77,7 +77,7 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "").tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", analysis: library.analysis[document.id]).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
@@ -133,7 +133,8 @@ struct LibraryView: View {
                     openCopy: { library.openCopy(document) },
                     trashOrRestore: { document.trashedAt == nil ? library.moveToTrash(document.id) : library.restore(document.id) },
                     processing: library.processing[document.id], textService: library.textSearchService,
-                    retryProcessing: { library.retryProcessing(document.id, restart: $0) })
+                    retryProcessing: { library.retryProcessing(document.id, restart: $0) },
+                    analysis: library.analysis[document.id], retryAnalysis: { library.retryAnalysis(document.id) }, applyAnalysis: { library.applyAnalysis(document.id) })
                     .id(document.id)
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
@@ -226,6 +227,7 @@ private struct DocumentRow: View {
     let thumbnails: ThumbnailService
     let processing: ProcessingSnapshot?
     let snippet: String
+    let analysis: AnalysisSnapshot?
     @State private var thumbnail: NSImage?
     private var highlightedSnippet: Text {
         var result = Text("")
@@ -268,6 +270,8 @@ private struct DocumentRow: View {
                     } else if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
                         Text("Review")
+                    } else if let confidence = analysis?.result?.confidence, confidence >= 0.65 && confidence < 0.90 {
+                        Text("Suggested filing").foregroundStyle(.orange)
                     } else { Text(document.formatLabel) }
                 }.font(.caption).foregroundStyle(.secondary)
             }

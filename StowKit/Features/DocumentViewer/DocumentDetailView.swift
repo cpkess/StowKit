@@ -12,6 +12,9 @@ struct DocumentDetailView: View {
     let processing: ProcessingSnapshot?
     let textService: TextSearchService?
     let retryProcessing: (Bool) -> Void
+    let analysis: AnalysisSnapshot?
+    let retryAnalysis: () -> Void
+    let applyAnalysis: () -> Void
     @State private var showDetails = true
     @State private var quickLookURL: URL?
 
@@ -39,6 +42,7 @@ struct DocumentDetailView: View {
                         VStack(alignment: .leading, spacing: 18) {
                             ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
                                 isTrashed: document.trashedAt != nil, retry: retryProcessing)
+                            UnderstandingInspector(snapshot: analysis, isTrashed: document.trashedAt != nil, retry: retryAnalysis, apply: applyAnalysis)
                             Divider()
                             if document.trashedAt != nil {
                                 HStack {

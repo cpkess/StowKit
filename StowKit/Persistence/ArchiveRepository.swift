@@ -10,7 +10,7 @@ import SwiftData
 
     init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV3.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV4.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])
@@ -48,6 +48,7 @@ import SwiftData
         // Explicit duplicate handling avoids SwiftData's unique-attribute upsert changing metadata.
         guard try matching(hash: document.contentHash) == nil else { throw ArchiveError.duplicate }
         context.insert(Record(document))
+        context.insert(ArchiveSchemaV4.AnalysisRecord(document.id))
         context.insert(ArchiveSchemaV2.ProcessingJobRecord(documentID: document.id, paused: document.trashedAt != nil))
         markSearchChanged(document.id)
         try save()
@@ -56,6 +57,7 @@ import SwiftData
         let id = document.id
         let descriptor = FetchDescriptor<Record>(predicate: #Predicate { $0.id == id })
         guard let record = try context.fetch(descriptor).first else { throw ArchiveError.missingRecord }
+        try protectManualChanges(from: record.document, to: document)
         record.updateMetadata(from: document)
         if let job = try processingJob(document.id) {
             if document.trashedAt != nil && (job.state == ProcessingState.queued.rawValue || job.snapshot.state.isActive) {

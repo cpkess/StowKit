@@ -45,6 +45,8 @@ final class LibraryStore {
     var hasMore: Bool { documents.count < totalResults }
     private var selectedOverride: HouseholdDocument?
     var selectedDocument: HouseholdDocument? { documents.first { $0.id == selection } ?? (selectedOverride?.id == selection ? selectedOverride : nil) }
+    private(set) var analysis: [UUID: AnalysisSnapshot] = [:]
+    @ObservationIgnored private var intelligenceProcessor: DocumentIntelligenceProcessor?
     @ObservationIgnored private var processor: DocumentProcessor?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var searchGeneration = 0
@@ -67,6 +69,7 @@ final class LibraryStore {
     private func refreshProcessingOverview() {
         guard let overview = try? repository?.processingOverview(ids: documents.map(\.id)) else { return }
         processing = overview.snapshots
+        analysis = (try? repository?.analysisSnapshots(documents.map(\.id) + [selection].compactMap { $0 })) ?? [:]
         pendingProcessingCount = overview.pending
     }
     func reconcileSelection() {
@@ -95,16 +98,23 @@ final class LibraryStore {
             do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }
             catch { textSearchError = error.localizedDescription }
             try await textSearchService?.recoverProcessingQueue()
+            try await textSearchService?.recoverAnalysisQueue()
+            if let reader = textSearchService {
+                intelligenceProcessor = DocumentIntelligenceProcessor(repository: repository, reader: reader, onUpdate: { [weak self] id in
+                    self?.analysisDidUpdate(id)
+                }, onError: { [weak self] in self?.errorMessage = $0 })
+            }
             refreshProcessingOverview()
             processor = DocumentProcessor(repository: repository, storage: storage, onUpdate: { [weak self] snapshot in
                 self?.processing[snapshot.id] = snapshot
+                if snapshot.state == .complete, self?.processingEnabled == true { self?.intelligenceProcessor?.start() }
                 if snapshot.state == .complete || snapshot.state == .failed || snapshot.state == .paused {
                     self?.refreshProcessingOverview()
                 }
                 if snapshot.state == .complete || snapshot.state == .failed { self?.refreshTextSearch(resetLimit: false) }
             }, onError: { [weak self] message in self?.errorMessage = message })
             isReady = true
-            if processingEnabled { processor?.start() }
+            if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
             refreshTextSearch()
             await waitForSearch()
             reconcileSelection()
@@ -126,7 +136,7 @@ final class LibraryStore {
             }
             refreshTextSearch(resetLimit: false)
             if let snapshot = try repository.processingJob(document.id)?.snapshot { processing[document.id] = snapshot }
-            if processingEnabled { processor?.start() }
+            if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
             reconcileSelection()
         } catch { errorMessage = "Your change could not be saved.\n\n\(error.localizedDescription)" }
     }
@@ -192,7 +202,7 @@ final class LibraryStore {
                             message: result.document.trashedAt == nil ? "Already in your library as “\(result.document.title)”." : "Already in Trash as “\(result.document.title)”. Restore it from Trash.", documentID: result.document.id))
                     } else {
                         if let snapshot = try repository?.processingJob(result.document.id)?.snapshot { processing[result.document.id] = snapshot }
-                        if processingEnabled { processor?.start() }
+                        if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
                         report.imported += 1
                         // Imports always appear in Inbox until manually reviewed; no AI is implied.
                         destination = .inbox
@@ -217,8 +227,29 @@ final class LibraryStore {
         do {
             processing[id] = try repository.retryProcessing(id, restart: restart)
             refreshTextSearch()
-            if processingEnabled { processor?.start() }
+            if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
         } catch { errorMessage = error.localizedDescription }
+    }
+    private func analysisDidUpdate(_ id: UUID) {
+        // Refresh metadata immediately so inspector edits cannot write an older pre-analysis
+        // snapshot back while the asynchronous search refresh is still pending.
+        if let document = try? repository?.document(id) {
+            if let index = documents.firstIndex(where: { $0.id == id }) { documents[index] = document }
+            if selectedOverride?.id == id { selectedOverride = document }
+        }
+        refreshProcessingOverview()
+        refreshTextSearch(resetLimit: false)
+    }
+    func retryAnalysis(_ id: UUID) {
+        do {
+            try repository?.requestAnalysis(id)
+            refreshProcessingOverview()
+            if processingEnabled { intelligenceProcessor?.start() }
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func applyAnalysis(_ id: UUID) {
+        do { try repository?.acceptAnalysis(id); selectedOverride = try repository?.document(id); refreshTextSearch(resetLimit: false) }
+        catch { errorMessage = error.localizedDescription }
     }
     func waitForSearch() async {
         while let task = searchTask {
@@ -266,6 +297,7 @@ final class LibraryStore {
                 let page = try await service.search(query, destination: scope, newestFirst: sort, limit: limit)
                 guard !Task.isCancelled, searchGeneration == generation else { return }
                 documents = page.hits.map(\.document)
+                if documents.contains(where: { $0.id == selectedOverride?.id }) { selectedOverride = nil }
                 snippets = Dictionary(uniqueKeysWithValues: page.hits.map { ($0.document.id, $0.snippet) })
                 totalResults = page.total
                 statistics = page.statistics
