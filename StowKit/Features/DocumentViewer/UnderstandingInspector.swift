@@ -18,7 +18,7 @@ struct UnderstandingInspector: View {
                 }
             }
             if let result = snapshot?.result {
-                Text("\(result.provider) · \(result.confidence >= 0.90 ? "High confidence" : result.confidence >= 0.65 ? "Suggested filing" : "Needs review")")
+                Text("\(result.provider) · \(result.confidence >= 0.90 ? "High confidence" : result.confidence >= 0.65 ? "Medium confidence" : "Low confidence")")
                     .font(.caption).foregroundStyle(.secondary)
                 if !result.note.isEmpty { Text(result.note).font(.caption).foregroundStyle(.secondary) }
             }

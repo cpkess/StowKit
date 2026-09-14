@@ -17,7 +17,7 @@ enum ArchiveSchemaV4: VersionedSchema {
             updatedAt = Date(); revision = 0
         }
         var snapshot: AnalysisSnapshot {
-            AnalysisSnapshot(id: documentID, state: state, result: resultData.flatMap { try? JSONDecoder().decode(DocumentUnderstanding.self, from: $0) }, error: error)
+            AnalysisSnapshot(id: documentID, state: state, result: resultData.flatMap { try? JSONDecoder().decode(DocumentUnderstanding.self, from: $0) }, error: error, reviewProtected: protectedFields.contains("review"))
         }
     }
 }
@@ -26,4 +26,5 @@ struct AnalysisSnapshot: Identifiable, Sendable {
     let state: String
     let result: DocumentUnderstanding?
     let error: String?
+    let reviewProtected: Bool
 }

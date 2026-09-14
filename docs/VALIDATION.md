@@ -4,7 +4,7 @@ Validated on September 13, 2026 with Xcode 26.3 / Swift 6.2.4 on Apple Silicon.
 
 ## Automated checks
 
-The final run passed all 56 tests with zero failures (17 archive, 13 processing, 12 search, and 14 intelligence tests). Run the shared StowKit scheme's XCTest target using the README command. Tests create and remove their own temporary archives; they do not import personal documents.
+The final run passed all 57 tests with zero failures (17 archive, 13 processing, 12 search, and 15 intelligence tests). Run the shared StowKit scheme's XCTest target using the README command. Tests create and remove their own temporary archives; they do not import personal documents.
 
 Coverage:
 
@@ -104,11 +104,28 @@ The cache was 447.3 MB, including stored text and FTS postings. These are optimi
 
 The benchmark caught an expensive SQLite count plan that repeated MATCH per document. The final query makes FTS drive the join and generates snippets only for the selected window.
 
-## Native UI status for Milestones 3–5
+## Native verification — September 14, 2026
 
-Native visual verification remains pending. Automatic approval review blocked UI inspection because the Mac had been confirmed locked and no unlock confirmation was received. Automated build, migration, repository, processing, full-text search, and real OCR tests ran successfully. No visual verification of progress, View Text, Copy All, Retry, snippets, Load More, or the new Suggestions/Analyze Again controls is claimed.
+Verified with generated, clearly marked fictional fixtures on the unlocked macOS 15.7.3 desktop. The main pass used the Milestone 5 Release build; the review-state fix was rechecked in the corrected Debug build that passed all 57 tests.
 
-When the desktop is available: import clearly marked scan/PDF fixtures, inspect extracted text, search an OCR-only phrase with ⌘K, verify highlighted snippets and scoped ⌘F, exercise Load More with a larger fixture library, and rebuild the index from Settings. Check metadata edits, Trash/Restore, and an existing duplicate outside the first page. For understanding, inspect the provider label and evidence, apply a proposal, verify Suggested filing versus Inbox, and confirm a manual title survives Analyze Again. Quit/relaunch during processing and confirm checkpoint recovery. Do not use personal records for the smoke test.
+- Imported a two-page mixed PDF through the native picker. The inspector reported two pages, one OCR page; View Text displayed embedded text and OCR separately.
+- Confirmed high-confidence filing into Insurance and a cleared Inbox; the PDF preview and page-navigation control worked.
+- Searched an OCR-only word (`blueberry`) and visually verified its highlighted result snippet. Vision transcribed `bicycle` as `biccle`; the original remained intact. This is an observed OCR accuracy limitation, not an indexing failure.
+- Exercised View Text and Copy All. The copy control was activated; clipboard contents were not independently inspected.
+- Changed the title, ran Analyze Again, and confirmed the manual title survived.
+- Verified ⌘N, global ⌘K, and scoped ⌘F through the native UI.
+- Imported a PNG warranty scan. It rendered correctly, was filed under Warranties, and showed the medium-confidence Suggested filing label.
+- Visually inspected the Suggestions sheet, including title, collection, tags, summary, evidence, and the explicit replacement explanation; applied the proposal.
+- Found and fixed a review-state bug: accepting already-applied suggestions did not protect unchanged fields or clear Suggested filing. Acceptance now explicitly protects the review decision and nonempty suggested fields in the same metadata transaction. The corrected UI clears the row label; reanalysis preserves acceptance. A regression test verifies acceptance also survives later uncertain OCR results.
+- Imported a password-protected PDF. It remained in Inbox, displayed an actionable error and Retry, and retained its archived metadata. Retrying safely returned the same locked-PDF error.
+- Rebuilt the search index through Settings and successfully searched the image's OCR-only word `tangerine` afterward.
+- Quit and relaunched the application; all three documents, edited title, extraction state, and filing results persisted.
+- Moved the warranty to Trash and restored it; it returned to Recent with its reviewed state preserved.
+- Finished by moving all three new fixtures to recoverable Trash. Recent and Inbox are empty; Trash contains these three plus the two prior QA fixtures. No personal documents were imported or edited.
+
+Load More with a visually populated 50+ document list, Finder mouse dragging, in-flight quit/relaunch on a long OCR job, and a live Apple model remain outside this desktop smoke test. Pagination, interruption recovery, and drop-provider delivery are covered by the automated suite. Apple generation still requires an eligible macOS 26 installation.
+
+The corrected Debug build and 57-test suite succeeded. The corrected Release build also succeeded after a temporary approval-service capacity error, and was launched successfully at the end of verification. It is left open with an empty active library and all QA fixtures recoverable in Trash.
 
 ## Prior Milestone 2 native smoke test
 

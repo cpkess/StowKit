@@ -270,7 +270,7 @@ private struct DocumentRow: View {
                     } else if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
                         Text("Review")
-                    } else if let confidence = analysis?.result?.confidence, confidence >= 0.65 && confidence < 0.90 {
+                    } else if analysis?.reviewProtected == false, let confidence = analysis?.result?.confidence, confidence >= 0.65 && confidence < 0.90 {
                         Text("Suggested filing").foregroundStyle(.orange)
                     } else { Text(document.formatLabel) }
                 }.font(.caption).foregroundStyle(.secondary)

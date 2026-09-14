@@ -64,6 +64,22 @@ import FoundationModels
         await run()
         XCTAssertTrue(try XCTUnwrap(repository.document(document.id)).needsReview)
     }
+    func testAcceptingUnchangedSuggestionsProtectsReviewAndMetadata() async throws {
+        let document = try seed("A limited warranty for a fictional household product.")
+        await run()
+        XCTAssertFalse(try XCTUnwrap(repository.analysis(document.id)).snapshot.reviewProtected)
+        let before = try XCTUnwrap(repository.document(document.id))
+        try repository.acceptAnalysis(document.id)
+        XCTAssertTrue(try XCTUnwrap(repository.analysis(document.id)).snapshot.reviewProtected)
+        XCTAssertTrue(try XCTUnwrap(repository.analysis(document.id)).protectedFields.contains("title"))
+        _ = try repository.retryProcessing(document.id, restart: true)
+        _ = try repository.setPageCount(document.id, count: 1)
+        _ = try repository.savePage(document.id, index: 0, result: .init(text: "Unclassified text", method: .ocr))
+        _ = try repository.setProcessingState(document.id, .complete)
+        await run()
+        XCTAssertFalse(try XCTUnwrap(repository.document(document.id)).needsReview)
+        XCTAssertEqual(try repository.document(document.id)?.title, before.title)
+    }
     func testManualEditsSurvivePendingAnalysisIncludingClearedFields() async throws {
         var document = try seed()
         document.title = "My chosen title"; document.summary = "Temporary"
