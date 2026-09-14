@@ -102,6 +102,8 @@ Manual changes permanently protect the corresponding title, summary, corresponde
 
 Trash and Extract Again increment the analysis revision. An in-flight result can commit only if its revision still matches, its job is analyzing, and its document is active. Restore requeues completed-text analysis; resetting OCR waits for new text. Result persistence, merged metadata, job completion, and the search receipt share one SwiftData transaction. The full-text index then observes applied metadata through its existing journal.
 
-## Next milestone
+## iCloud architecture and next implementation
 
-Milestone 6 is an iCloud architecture note before synchronization code: cover private/shared CloudKit zones, CKShare membership, CKAsset originals, record ownership, conflicts, tombstones, asset verification, cache pins, and transfer recovery. SwiftData automatic CloudKit integration alone is not a household-sharing implementation. The local unique attributes and name-based memberships will need deliberate migration; synchronization remains disabled.
+Milestone 6 is documented in [iCloud and household architecture](ICLOUD_ARCHITECTURE.md): one shared CloudKit zone per household, explicit metadata change feeds that exclude original assets, resumable verified transfers, durable conflict handling, and device-local cache pins. SwiftData automatic CloudKit integration alone is not a household-sharing implementation. Synchronization remains disabled.
+
+The recommended next slice adds local versioned sync state, stable collection identities, a transactional outbox, conflict tests with a fake transport, and a storage manager through which consumers request original URLs. It must preserve the current archive and work without an iCloud account. Live CloudKit and cache eviction follow separate acceptance gates in the note.

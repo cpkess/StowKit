@@ -1,4 +1,12 @@
-# Milestone 5 validation
+# Validation
+
+## Milestone 6 architecture review
+
+Reviewed September 14, 2026. This milestone changes documentation only. The [iCloud architecture note](ICLOUD_ARCHITECTURE.md) was checked against the current local schemas, explicit `cloudKitDatabase: .none` configuration, import recovery, incremental search journal, and manual-analysis protections. Apple's CloudKit documentation and the installed Xcode 26.3 SDK informed the API choices; the SDK's CKSyncEngine fetch options do not expose asset-field projection.
+
+Checked documentation links to local files and whitespace with `git diff --check`. No application code, schema, entitlements, signing, or user data changed. Builds and tests were not rerun for this documentation-only milestone; the application validation below remains the last executable verification. CloudKit projection, two-account sharing, encrypted fields, transfers, and eviction are proposed and explicitly untested. The note defines the acceptance gates required before shipping them.
+
+## Milestone 5
 
 Validated on September 13, 2026 with Xcode 26.3 / Swift 6.2.4 on Apple Silicon.
 

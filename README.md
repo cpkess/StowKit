@@ -1,6 +1,6 @@
 # StowKit
 
-A native, local-first macOS household document archive. **Milestone 5: on-device document understanding with a local-rules fallback.**
+A native, local-first macOS household document archive. **Milestones 1–5 implemented; Milestone 6 iCloud architecture documented.** Synchronization remains unimplemented.
 
 ## Run
 
@@ -67,4 +67,4 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
 
 The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migration from V1 and V2, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, prefix/phrase matching, metadata updates, pagination, journal replay, and cache failure/rebuilding. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
 
-See [architecture and implementation notes](docs/ARCHITECTURE.md) and [validation](docs/VALIDATION.md).
+See [architecture and implementation notes](docs/ARCHITECTURE.md), the proposed [iCloud and household architecture](docs/ICLOUD_ARCHITECTURE.md), and [validation](docs/VALIDATION.md). The next implementation slice is local sync foundations with a fake transport, before live CloudKit provisioning.
