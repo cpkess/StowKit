@@ -1,5 +1,15 @@
 # Validation
 
+## CloudKit implementation on macOS 27
+
+September 19, 2026: **95 tests passed with zero failures** on macOS 27.0 (26A428), Xcode 27.0 (27A266a), Apple Silicon. The optimized Release build also succeeded. The full suite includes 13 CloudArchiveTests covering searchable remote text without original downloads, thumbnail behavior, concurrent duplicate imports, conditional-save conflicts, exact acknowledgments, account binding, transactional invalid-page rejection, V7→V8 text-queue migration, multiple text batches past blocked extraction, read-only participants, corrupt-original rejection, and expired-token recovery. Apple Foundation Models reported available; the existing on-device inference test passed.
+
+The first full run found a SQLite lock in the raw legacy migration fixture. Releasing the fixture container in an autorelease pool and setting a bounded SQLite busy timeout fixed fixture construction; the subsequent complete run passed. The V8 migration retains the old property mapping to avoid the macOS 27 inherited `hash` accessor collision. Framework logs still include autoShortcut connection failures, SwiftData diagnostics, and Vision model-resource messages; their presence did not fail the assertions.
+
+Native UI smoke verification: the app opened the existing six-document archive on macOS 27, showed its existing list and Trash count, and opened Settings. Settings correctly displayed iCloud off and the requirement for a configured signed build. Before launch, the SQLite database and originals were backed up to `/tmp/StowKit-pre-V8-backup`; all six original SHA-256 values remained identical afterward. This temporary backup is verification evidence, not a durable user backup. No document contents were changed for this smoke check.
+
+**Live iCloud remains blocked:** Xcode now launches, but Apple Accounts reports expired authentication; `security find-identity -v -p codesigning` reports zero valid identities. No live container, private/shared sync, invitation, permission revocation, network asset projection, or quota test has passed yet. No document uploads or invitations were sent. See [setup and live acceptance](ICLOUD_SETUP.md). The sections below are historical checkpoints, not descriptions of the current implementation.
+
 ## Local sync recovery
 
 September 14, 2026: the expanded Debug suite passes **82 tests with zero failures**, including 12 new recovery tests. The Release build also succeeded. These cover bounded backfill across restart, edits during backfill, rollback without advancing the checkpoint, conservative legacy protections, independent-field merges and search indexing, persisted baselines/cursors, conflict history and resolution, newer local edits invalidating stale resolutions, later remote edits retaining the local alternative, all-or-nothing invalid-page rejection, stale page rejection, unsupported versions/archive identities/memberships, fake fetch retry, and V5 migration preserving a pending operation UUID.

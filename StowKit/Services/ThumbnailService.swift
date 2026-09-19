@@ -10,7 +10,7 @@ actor ThumbnailService {
     func thumbnail(for document: HouseholdDocument) async throws -> Data {
         let cache = storage.thumbnailURL(for: document.id)
         if let data = try? Data(contentsOf: cache) { return data }
-        let original = try await storage.localOriginal(for: document)
+        guard let original = try await storage.cachedOriginal(for: document) else { throw OriginalAccessError.missing }
         let data = try render(url: original, isImage: document.isImage, maxPixelSize: 160)
         try FileManager.default.createDirectory(at: cache.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: cache, options: .atomic)

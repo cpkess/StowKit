@@ -1,0 +1,11 @@
+// Copy to Config/iCloud.local.xcconfig and supply your Apple Developer team.
+// Use only with a provisioning profile that authorizes this container and app ID.
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_ENTITLEMENTS = Config/StowKitCloud.entitlements
+STOWKIT_CLOUD_CONTAINER = iCloud.com.stowkit.app
+STOWKIT_CLOUD_ENVIRONMENT = Development
+INFOPLIST_KEY_StowKitCloudContainer = $(STOWKIT_CLOUD_CONTAINER)
+INFOPLIST_KEY_StowKitCloudEnvironment = $(STOWKIT_CLOUD_ENVIRONMENT)
+INFOPLIST_KEY_CKSharingSupported = YES

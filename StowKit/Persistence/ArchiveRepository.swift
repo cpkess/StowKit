@@ -8,21 +8,25 @@ import SwiftData
     let archiveID: UUID
     let context: ModelContext
 
-    init(root: URL) throws {
+    init(root: URL, joiningArchiveID: UUID? = nil) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV6.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV8.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])
         context = ModelContext(container)
         context.autosaveEnabled = false
         if let archive = try context.fetch(FetchDescriptor<ArchiveSchemaV1.ArchiveRecord>()).first {
+            if let joiningArchiveID, archive.id != joiningArchiveID { throw SyncRecoveryError.invalidPayload }
             archiveID = archive.id
         } else {
             let archive = ArchiveSchemaV1.ArchiveRecord()
+            if let joiningArchiveID { archive.id = joiningArchiveID }
             archiveID = archive.id
             context.insert(archive)
-            for collection in LibraryCollection.defaults { context.insert(ArchiveSchemaV1.CollectionRecord(collection)) }
+            if joiningArchiveID == nil {
+                for collection in LibraryCollection.defaults { context.insert(ArchiveSchemaV1.CollectionRecord(collection)) }
+            }
             try context.save()
         }
     }

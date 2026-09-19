@@ -10,6 +10,19 @@ struct LibraryView: View {
     @State private var collectionName = ""
 
     var body: some View {
+        if library.cloudAccessSuspended {
+            ContentUnavailableView {
+                Label("Household Access Paused", systemImage: "icloud.slash")
+            } description: { Text(library.cloudStatus) } actions: {
+                Button("Verify iCloud Access") { Task { await library.connectCloud() } }
+                Button("Open Local Archive") {
+                    UserDefaults.standard.removeObject(forKey: "StowKitArchiveRoot")
+                    NotificationCenter.default.post(name: .stowKitSwitchArchive, object: DocumentStorageManager.defaultRoot)
+                }
+            }
+        } else { archiveBody }
+    }
+    private var archiveBody: some View {
         NavigationSplitView {
             List(selection: $library.destination) {
                 Section {

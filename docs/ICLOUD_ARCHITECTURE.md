@@ -1,8 +1,10 @@
 # Milestone 6: iCloud and household architecture
 
-Proposed design, September 14, 2026. This milestone changes documentation only. The shipping implementation remains local, with SwiftData CloudKit integration explicitly disabled. No container, entitlement, account, share, upload, or cache eviction is created by this note.
+Design target originally recorded September 14, 2026. The sections below describe the intended architecture and acceptance gates, including features beyond the current implementation.
 
-Implementation follow-up: the first local portion of step 1 now exists. See [current implementation](ARCHITECTURE.md) and [validation](VALIDATION.md) for the V5 receipt journal and V6 backfill, server baselines, atomic incoming pages, and persisted conflicts. The full design below remains a target; account binding, full collection normalization, new remote document creation, live transports, and conflict review UI are not implemented yet.
+**Implementation update, September 19:** CloudKit transport, account binding, normalized local collections, incoming documents, text queues, conditional saves, original transfers, conflict review, and native sharing UI now exist. Default builds remain local; live CloudKit is not yet accepted. [Current implementation](ARCHITECTURE.md) is authoritative for implemented behavior; [setup](ICLOUD_SETUP.md) lists the remaining live gates.
+
+Differences from the target: deterministic archive/content-derived cloud document IDs replace hash-claim records; memberships travel in document snapshots; conflicts remain local; discovery explicitly enumerates zones rather than maintaining database-change subscriptions. Text generations use one bounded chunked JSON blob. Thumbnails, cache eviction/pin UI, synchronized conflict records, and permanent deletion are not implemented. Collection aliases preserve local names; there is no rename/merge UI. Full scans after expired tokens do not reconcile missing records as deletions.
 
 ## Decision
 

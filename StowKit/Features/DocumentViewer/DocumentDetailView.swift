@@ -18,6 +18,7 @@ struct DocumentDetailView: View {
     @State private var showDetails = true
     @State private var quickLookURL: URL?
     @State private var originalError: String?
+    @State private var localOriginalAvailable: Bool?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -95,7 +96,7 @@ struct DocumentDetailView: View {
                             Divider()
                             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
                                 field("Original file") { Text(document.originalFilename).textSelection(.enabled).lineLimit(2) }
-                                field("Storage") { Label("Available offline", systemImage: "internaldrive") }
+                                field("Storage") { Label(localOriginalAvailable == true ? "Available offline" : "Original not downloaded", systemImage: localOriginalAvailable == true ? "internaldrive" : "icloud") }
                                 field("File size") { Text(ByteCountFormatter.string(fromByteCount: document.fileSize, countStyle: .file)) }
                                 field("Imported") { Text(document.importedAt, format: .dateTime.month().day().year()) }
                                 field("Processing") { Text(processing?.progressLabel ?? "Queued") }
@@ -115,7 +116,7 @@ struct DocumentDetailView: View {
                 Button {
                     let selected = document
                     Task {
-                        do { quickLookURL = try await storage.localOriginal(for: selected) }
+                        do { quickLookURL = try await storage.localOriginal(for: selected); localOriginalAvailable = true }
                         catch { originalError = error.localizedDescription }
                     }
                 } label: { Label("Quick Look", systemImage: "eye") }
@@ -133,7 +134,7 @@ struct DocumentDetailView: View {
     }
 
     private var preview: some View {
-        DocumentPreview(document: document, storage: storage, thumbnails: thumbnails)
+        DocumentPreview(document: document, storage: storage, thumbnails: thumbnails, localAvailable: $localOriginalAvailable)
     }
     private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         GridRow(alignment: .firstTextBaseline) {
@@ -147,6 +148,9 @@ private struct DocumentPreview: View {
     let document: HouseholdDocument
     let storage: DocumentStorageManager
     let thumbnails: ThumbnailService
+    @Binding var localAvailable: Bool?
+    @State private var cloudOnly = false
+    @State private var requestDownload = false
     @State private var pdf: PDFDocument?
     @State private var image: NSImage?
     @State private var failure: String?
@@ -155,7 +159,13 @@ private struct DocumentPreview: View {
 
     var body: some View {
         Group {
-            if let failure {
+            if cloudOnly {
+                ContentUnavailableView {
+                    Label("Original in iCloud", systemImage: "icloud.and.arrow.down")
+                } description: { Text("Metadata and downloaded text are available. Download the original to preview it on this Mac.") } actions: {
+                    Button("Download Original") { requestDownload = true; reload += 1 }
+                }
+            } else if let failure {
                 ContentUnavailableView {
                     Label("Preview Unavailable", systemImage: "doc.badge.ellipsis")
                 } description: { Text(failure) } actions: { Button("Retry") { reload += 1 } }
@@ -183,8 +193,17 @@ private struct DocumentPreview: View {
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .task(id: reload) {
-            pdf = nil; image = nil; failure = nil; pageIndex = 0
+            pdf = nil; image = nil; failure = nil; pageIndex = 0; cloudOnly = false
             do {
+                if try await storage.cachedOriginal(for: document) == nil {
+                    localAvailable = false
+                    if !requestDownload {
+                        guard await storage.canDownloadOriginals() else { throw OriginalAccessError.missing }
+                        cloudOnly = true; return
+                    }
+                    _ = try await storage.localOriginal(for: document)
+                }
+                localAvailable = true
                 if document.isImage {
                     let data = try await thumbnails.imagePreview(for: document)
                     guard !Task.isCancelled else { return }

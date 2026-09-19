@@ -1,10 +1,10 @@
 # StowKit
 
-A native, local-first macOS household document archive. **Milestones 1–5 implemented; iCloud architecture, local sync receipts, backfill, and recovery are implemented.** Live synchronization remains disabled.
+A native, local-first macOS household document archive. **Local archive features and an opt-in CloudKit implementation are present.** Live iCloud and household sharing still require provisioning and acceptance testing; the default build remains local.
 
 ## Run
 
-Open `StowKit.xcodeproj` in Xcode 26.3 or later, select **StowKit → My Mac**, and Run (⌘R). Minimum deployment target: macOS 14.0. No packages, account, server, or provisioning team are required for local development; the project uses ad-hoc signing.
+Open `StowKit.xcodeproj` in Xcode 27 on macOS 27 (or a compatible Xcode 26 installation on earlier macOS), select **StowKit → My Mac**, and Run (⌘R). Minimum deployment target: macOS 14.0. No packages, account, server, or provisioning team are required for local development; the project uses ad-hoc signing.
 
 ```sh
 xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -derivedDataPath /tmp/StowKitDerived build
@@ -53,7 +53,7 @@ The sandboxed app keeps its archive under its Application Support directory:
 
 Settings displays the actual location. A non-sandboxed development runner may use a different Application Support location. Originals never use collection names as folder paths. Imports use security-scoped file access, coordinated reads, streaming SHA-256, and atomic staging/promotion. Originals are stored with read-only permissions. Opening a copy creates a separate file in the app's temporary directory; edits to it are not automatically reimported.
 
-**This is a local archive, not a cloud backup.** iCloud/household synchronization is a future milestone. PDF parsing, Vision OCR, document understanding, and classification run locally, with no external AI service. Back up the complete archive directory while the app is closed, including database sidecars and originals. No telemetry, external AI, or network integration is included.
+**The default build is a local archive, not a cloud backup.** A provisioned build can opt into iCloud in Settings; see the [iCloud setup and acceptance guide](docs/ICLOUD_SETUP.md). PDF parsing, Vision OCR, document understanding, and classification run locally, with no external AI service. Back up the complete archive directory while the app is closed, including database sidecars and originals. No telemetry or external AI is included. Opting into iCloud uploads originals, metadata, and extracted text through CloudKit.
 
 The first launch starts empty; the old fictional sample library is no longer loaded. Importing does not move or modify source files.
 
@@ -65,6 +65,6 @@ Run **Product → Test (⌘U)** in Xcode or:
 xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -derivedDataPath /tmp/StowKitDerived -destination 'platform=macOS' test
 ```
 
-The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migrations through V6, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, metadata updates, pagination, journal replay, and cache failure/rebuilding. Local sync tests cover coalesced change receipts, stale acknowledgments, fake-transport retry, resumable backfill, atomic incoming pages, and persisted conflict resolution. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
+The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migrations through V8, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, metadata updates, pagination, journal replay, and cache failure/rebuilding. Sync tests cover coalesced change receipts, stale acknowledgments, fake-transport retry, resumable backfill, atomic incoming pages, persisted conflict resolution, remote document creation, searchable text without original downloads, duplicate imports, read-only access, corrupt downloads, and expired change tokens. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
 
-See [architecture and implementation notes](docs/ARCHITECTURE.md), the proposed [iCloud and household architecture](docs/ICLOUD_ARCHITECTURE.md), and [validation](docs/VALIDATION.md). Metadata changes now keep local sync receipts, but the app never constructs a network transport. Backfill and incoming recovery run against test transports. Normalized collection migration, new remote documents, and conflict review UI remain before live CloudKit provisioning.
+See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud architecture](docs/ICLOUD_ARCHITECTURE.md), [setup and live acceptance steps](docs/ICLOUD_SETUP.md), and [validation](docs/VALIDATION.md). Fake transport tests do not establish live CloudKit behavior. Automatic local-file eviction, cloud thumbnails, and production deployment remain unfinished.

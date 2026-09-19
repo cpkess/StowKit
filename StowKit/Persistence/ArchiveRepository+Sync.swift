@@ -22,8 +22,9 @@ extension ArchiveRepository {
 
     func journalCollection(_ collection: LibraryCollection) throws {
         let id = try collectionIdentity(collection.name)
+        let normalized = try ensureNormalizedCollection(collection, id: id)
         try journal(key: "collection:\(id.uuidString)", values: [
-            "name": .text(collection.name), "symbol": .text(collection.symbol)
+            "name": .text(normalized.name), "symbol": .text(normalized.symbol)
         ], manualFields: ["name", "symbol"])
     }
 
@@ -71,6 +72,7 @@ extension ArchiveRepository {
             else { fields[key] = SyncField(value: value, manual: manual, operationID: operationID) }
         }
         let metadata = SyncMetadata(archiveID: archiveID, recordKey: key, fields: fields)
+        if key.hasPrefix("document:"), let id = UUID(uuidString: String(key.dropFirst(9))) { try saveMemberships(metadata, documentID: id) }
         guard metadata != previous else { return }
         for conflict in try openConflictRecords(key) {
             let observed = try JSONDecoder().decode(SyncField.self, from: conflict.observedField)

@@ -1,10 +1,11 @@
 import Foundation
 
 enum ProcessingState: String, Codable, Sendable {
-    case queued, extractingText, savingText, complete, failed, paused
+    case queued, extractingText, savingText, complete, failed, paused, remote
     var isActive: Bool { self == .extractingText || self == .savingText }
     var label: String {
         switch self {
+        case .remote: "Text is downloading from iCloud"
         case .queued: "Waiting to extract text"
         case .extractingText: "Extracting text"
         case .savingText: "Saving text"

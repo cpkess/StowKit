@@ -16,9 +16,9 @@ extension ArchiveRepository {
     /// Imported records behind the cursor already get their journal in the import transaction.
     @discardableResult func backfillSyncBatch(limit: Int = 64) throws -> Bool {
         do {
-            let phase = try checkpoint("sync-backfill-phase")
+            let phase = try checkpoint("sync-backfill-phase-v7")
             if phase.value == "complete" { return true }
-            let cursor = try checkpoint("sync-backfill-cursor")
+            let cursor = try checkpoint("sync-backfill-cursor-v7")
             let after = cursor.value
             let size = max(1, min(limit, 256))
             if phase.value.isEmpty {
@@ -32,8 +32,9 @@ extension ArchiveRepository {
                 var query = FetchDescriptor<Record>(predicate: #Predicate { $0.contentHash > after }, sortBy: [SortDescriptor(\.contentHash)])
                 query.fetchLimit = size
                 let batch = try context.fetch(query)
-                for record in batch where try syncRecord("document:\(record.id.uuidString)") == nil {
+                for record in batch {
                     try journalDocument(record.document)
+                    if try processingJob(record.id)?.state == "complete" { try queueTextUpload(record.id) }
                 }
                 if let last = batch.last { cursor.value = last.contentHash }
                 if batch.count < size { phase.value = "complete" }
@@ -62,13 +63,16 @@ extension ArchiveRepository {
                   Set(page.records.map(\.recordKey)).count == page.records.count else { throw SyncRecoveryError.invalidPayload }
             let token = try checkpoint("incoming-token")
             guard token.value == page.previousToken else { throw SyncRecoveryError.stalePage }
-            for metadata in page.records { try applyIncoming(metadata) }
+            for metadata in page.records {
+                if metadata.recordKey.hasPrefix("collection:") { try applyIncomingCollection(metadata) }
+                else { try applyIncoming(metadata) }
+            }
             token.value = page.nextToken
             try save()
         } catch { context.rollback(); throw error }
     }
 
-    private func applyIncoming(_ remote: SyncMetadata) throws {
+    func applyIncoming(_ remote: SyncMetadata) throws {
         guard remote.formatVersion == 1, remote.archiveID == archiveID else { throw SyncRecoveryError.invalidPayload }
         guard remote.recordKey.hasPrefix("document:"),
               let id = UUID(uuidString: String(remote.recordKey.dropFirst(9))),
@@ -99,6 +103,7 @@ extension ArchiveRepository {
             }
         }
         let updated = SyncMetadata(archiveID: archiveID, recordKey: remote.recordKey, fields: mergedFields)
+        try saveMemberships(updated, documentID: document.id)
         try materialize(updated, document: document)
         // Keep old alternatives as history when a newer field supersedes them.
         for conflict in try openConflictRecords(remote.recordKey) {

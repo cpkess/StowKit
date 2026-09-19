@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import UniformTypeIdentifiers
+import CloudKit
 
 struct ImportIssue: Identifiable {
     let id = UUID()
@@ -22,6 +23,17 @@ final class LibraryStore {
     var selection: UUID?
     var search = "" { didSet { selectedOverride = nil; refreshTextSearch() } }
     var errorMessage: String?
+    var cloudStatus = "iCloud is off"
+    var cloudHasError = false
+    var cloudReadOnly = false
+    var cloudAccessSuspended = false
+    var cloudEnabled = false
+    var cloudBusy = false
+    var cloudArchives: [CloudArchiveBinding] = []
+    var cloudConflicts: [StoredSyncConflict] = []
+    @ObservationIgnored private var cloudCoordinator: CloudSyncCoordinator?
+    @ObservationIgnored private var cloudTimer: Task<Void, Never>?
+    @ObservationIgnored private var accountObserver: NSObjectProtocol?
     private(set) var startupError: String?
     private(set) var isReady = false
     private(set) var isLoading = false
@@ -61,6 +73,92 @@ final class LibraryStore {
         self.processingEnabled = processingEnabled
         storage = DocumentStorageManager(root: root)
         thumbnails = ThumbnailService(storage: storage)
+    }
+    func refreshCloudState() {
+        cloudConflicts = (try? repository?.syncConflicts()) ?? []
+        collections = (try? repository?.collections()) ?? collections
+        if let id = selection { selectedOverride = try? repository?.document(id) }
+        refreshTextSearch(resetLimit: false)
+    }
+    func connectCloud() async {
+        guard let repository, let reader = textSearchService, !cloudBusy else { return }
+        cloudBusy = true; defer { cloudBusy = false }
+        do {
+            let binding: CloudArchiveBinding
+            if let existing = try repository.cloudBinding() { binding = existing.0 }
+            else { binding = try await CloudSetup.privateBinding(archiveID: repository.archiveID) }
+            guard CloudSetup.containerID == binding.containerID, CloudSetup.environment == binding.environment else { throw CloudArchiveError.setupRequired }
+            if binding.shared { cloudAccessSuspended = true }
+            let transport = CloudKitArchiveTransport(binding: binding)
+            try await transport.verifyAccount()
+            cloudReadOnly = !(try await transport.canWrite())
+            try repository.bindCloud(binding)
+            cloudEnabled = true; cloudHasError = false; cloudAccessSuspended = false
+            await storage.setCloudTransport(transport)
+            cloudCoordinator = CloudSyncCoordinator(repository: repository, storage: storage, reader: reader, transport: transport,
+                onStatus: { [weak self] status, failed in self?.cloudStatus = status; self?.cloudHasError = failed },
+                onUpdate: { [weak self] in self?.refreshCloudState() }, onAccess: { [weak self] writable in self?.cloudReadOnly = !writable },
+                onSuspended: { [weak self] in self?.cloudAccessSuspended = binding.shared; self?.cloudTimer?.cancel() })
+            cloudCoordinator?.schedule()
+            cloudTimer?.cancel()
+            cloudTimer = Task { [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(60)) } catch { break }
+                    self?.cloudCoordinator?.schedule()
+                }
+            }
+            if accountObserver == nil {
+                accountObserver = NotificationCenter.default.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.cloudAccessSuspended = binding.shared
+                        self.cloudStatus = "iCloud account changed. Reconnect to verify access."; self.cloudHasError = true
+                        await self.pauseCloud()
+                    }
+                }
+            }
+        } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
+    }
+    func pauseCloud() async {
+        cloudTimer?.cancel(); cloudTimer = nil
+        await cloudCoordinator?.stop(); cloudCoordinator = nil
+        await storage.setCloudTransport(nil)
+        try? repository?.disableCloud(); cloudEnabled = false
+    }
+    func shutdownForSwitch() async {
+        cloudTimer?.cancel(); searchTask?.cancel()
+        await cloudCoordinator?.stop(); await processor?.stop(); await intelligenceProcessor?.stop()
+        if let accountObserver { NotificationCenter.default.removeObserver(accountObserver); self.accountObserver = nil }
+    }
+    func syncNow() { cloudCoordinator?.schedule() }
+    func findCloudArchives() async {
+        cloudBusy = true; defer { cloudBusy = false }
+        do { cloudArchives = try await CloudSetup.archives() }
+        catch { cloudStatus = error.localizedDescription; cloudHasError = true }
+    }
+    func openCloudArchive(_ binding: CloudArchiveBinding) async {
+        do {
+            await pauseCloud(); await processor?.stop(); await intelligenceProcessor?.stop()
+            let root = try CloudSetup.prepareArchive(binding)
+            NotificationCenter.default.post(name: .stowKitSwitchArchive, object: root)
+        } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
+    }
+    func showHouseholdSharing() async {
+        do { if let binding = try repository?.cloudBinding()?.0 { try await CloudSetup.share(binding) } }
+        catch { cloudStatus = error.localizedDescription; cloudHasError = true }
+    }
+    func cloudConflictTitle(_ recordKey: String) -> String {
+        guard recordKey.hasPrefix("document:"), let id = UUID(uuidString: String(recordKey.dropFirst(9))) else { return "Collection" }
+        return (try? repository?.document(id)?.title) ?? "Document"
+    }
+    func resolveConflict(_ id: UUID, choice: SyncConflictChoice) {
+        guard allowCloudEdit() else { return }
+        do { try repository?.resolveSyncConflict(id, choosing: choice); refreshCloudState(); syncNow() }
+        catch { errorMessage = error.localizedDescription }
+    }
+    private func allowCloudEdit() -> Bool {
+        guard !cloudReadOnly, !cloudAccessSuspended else { errorMessage = "This household is read-only or access is paused."; return false }
+        return true
     }
     var inboxCount: Int { statistics.inbox }
     var trashCount: Int { statistics.trash }
@@ -114,10 +212,14 @@ final class LibraryStore {
                 if snapshot.state == .complete || snapshot.state == .failed { self?.refreshTextSearch(resetLimit: false) }
             }, onError: { [weak self] message in self?.errorMessage = message })
             isReady = true
-            if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
             refreshTextSearch()
             await waitForSearch()
             reconcileSelection()
+            if let binding = try repository.cloudBinding() {
+                if binding.0.shared { cloudAccessSuspended = true; cloudReadOnly = true }
+                if binding.1 { await connectCloud() }
+            }
+            if processingEnabled && !cloudReadOnly && !cloudAccessSuspended { processor?.start(); intelligenceProcessor?.start() }
         } catch { startupError = error.localizedDescription }
     }
 
@@ -125,11 +227,13 @@ final class LibraryStore {
         Binding(get: { self.documents.first(where: { $0.id == document.id }) ?? (self.selectedOverride?.id == document.id ? self.selectedOverride! : document) }, set: { self.update($0) })
     }
     func update(_ document: HouseholdDocument) {
+        guard allowCloudEdit() else { return }
         guard let repository else { return }
         var edited = document
         edited.modifiedAt = Date()
         do {
             try repository.update(edited)
+            syncNow()
             if let index = documents.firstIndex(where: { $0.id == document.id }) { documents[index] = edited }
             if selectedOverride?.id == document.id {
                 selectedOverride = (edited.trashedAt != nil) == (destination == .trash) ? edited : nil
@@ -156,9 +260,11 @@ final class LibraryStore {
         update(document)
     }
     @discardableResult func createCollection(_ name: String) -> Bool {
+        guard allowCloudEdit() else { return false }
         guard let repository else { return false }
         do {
             let collection = try repository.addCollection(name)
+            syncNow()
             collections = try repository.collections()
             destination = .collection(collection.name)
             search = ""
@@ -184,6 +290,7 @@ final class LibraryStore {
         }
     }
     func enqueueImports(_ urls: [URL]) {
+        guard allowCloudEdit() else { return }
         guard isReady, let importer, !urls.isEmpty else { return }
         pendingURLs.append(contentsOf: urls)
         guard !isImporting else { return }
@@ -217,12 +324,14 @@ final class LibraryStore {
             refreshProcessingOverview()
             refreshTextSearch()
             isImporting = false
+            syncNow()
             importProgress = ""
             lastImportMessage = "Imported \(report.imported) \(report.imported == 1 ? "document" : "documents")"
             if !report.issues.isEmpty { importReport = report }
         }
     }
     func retryProcessing(_ id: UUID, restart: Bool = false) {
+        guard allowCloudEdit() else { return }
         guard let repository else { return }
         do {
             processing[id] = try repository.retryProcessing(id, restart: restart)
@@ -231,6 +340,7 @@ final class LibraryStore {
         } catch { errorMessage = error.localizedDescription }
     }
     private func analysisDidUpdate(_ id: UUID) {
+        syncNow()
         // Refresh metadata immediately so inspector edits cannot write an older pre-analysis
         // snapshot back while the asynchronous search refresh is still pending.
         if let document = try? repository?.document(id) {
@@ -241,6 +351,7 @@ final class LibraryStore {
         refreshTextSearch(resetLimit: false)
     }
     func retryAnalysis(_ id: UUID) {
+        guard allowCloudEdit() else { return }
         do {
             try repository?.requestAnalysis(id)
             refreshProcessingOverview()
@@ -248,6 +359,7 @@ final class LibraryStore {
         } catch { errorMessage = error.localizedDescription }
     }
     func applyAnalysis(_ id: UUID) {
+        guard allowCloudEdit() else { return }
         do { try repository?.acceptAnalysis(id); selectedOverride = try repository?.document(id); refreshTextSearch(resetLimit: false) }
         catch { errorMessage = error.localizedDescription }
     }

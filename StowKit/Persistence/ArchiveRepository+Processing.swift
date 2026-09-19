@@ -29,7 +29,7 @@ extension ArchiveRepository {
         if state == .extractingText && job.state == ProcessingState.queued.rawValue { job.attempts += 1 }
         job.failedStage = state == .failed ? job.snapshot.state.label : nil
         job.lastError = error
-        if state == .complete { try queueAnalysis(id) }
+        if state == .complete { try queueAnalysis(id); try queueTextUpload(id) }
         job.state = state.rawValue
         job.updatedAt = Date()
         markSearchChanged(id)

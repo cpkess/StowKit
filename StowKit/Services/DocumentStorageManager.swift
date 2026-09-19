@@ -32,6 +32,12 @@ actor DocumentStorageManager {
     }
     static let supportedTypes: [UTType] = [.pdf, .jpeg, .png, .heic]
     private let files = FileManager.default
+    private var cloud: (any ArchiveCloudTransport)?
+    private var downloads: [UUID: Task<URL, Error>] = [:]
+    func setCloudTransport(_ transport: (any ArchiveCloudTransport)?) {
+        cloud = transport
+        if transport == nil { for task in downloads.values { task.cancel() } }
+    }
     init(root: URL) { self.root = root }
 
     nonisolated func originalURL(for relativePath: String) throws -> URL {
@@ -41,11 +47,24 @@ actor DocumentStorageManager {
               !relativePath.contains("..") else { throw ArchiveError.unsafePath }
         return root.appendingPathComponent(relativePath)
     }
+    func cachedOriginal(for document: HouseholdDocument) async throws -> URL? {
+        let url = try originalURL(for: document.relativePath)
+        guard files.fileExists(atPath: url.path) else { return nil }
+        return try await localOriginal(for: document)
+    }
+    func canDownloadOriginals() -> Bool { cloud != nil }
     /// Consumer boundary for originals. Future downloads/leases belong here.
     /// Import already verifies hashes; opening checks presence/type/size without rehashing each preview.
-    func localOriginal(for document: HouseholdDocument) throws -> URL {
+    func localOriginal(for document: HouseholdDocument) async throws -> URL {
         let url = try originalURL(for: document.relativePath)
-        guard files.fileExists(atPath: url.path) else { throw OriginalAccessError.missing }
+        if !files.fileExists(atPath: url.path) {
+            guard let cloud else { throw OriginalAccessError.missing }
+            if let task = downloads[document.id] { return try await task.value }
+            let task = Task { try await self.download(document, transport: cloud) }
+            downloads[document.id] = task
+            defer { downloads[document.id] = nil }
+            return try await task.value
+        }
         let attributes = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard attributes.isRegularFile == true, Int64(attributes.fileSize ?? -1) == document.fileSize else {
             throw ArchiveError.recoveryMismatch
@@ -53,6 +72,34 @@ actor DocumentStorageManager {
         return url
     }
 
+    private func download(_ document: HouseholdDocument, transport: any ArchiveCloudTransport) async throws -> URL {
+        let directory = root.appendingPathComponent("Transfers/\(document.id)")
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let staged = directory.appendingPathComponent("download")
+        try await transport.downloadOriginal(document, to: staged)
+        try await transport.verifyAccount()
+        try Task.checkCancellation()
+        guard try hash(staged) == document.contentHash else { throw CloudArchiveError.corruptAsset }
+        let original = try originalURL(for: document.relativePath)
+        try files.createDirectory(at: original.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if files.fileExists(atPath: original.path) {
+            guard try hash(original) == document.contentHash else { throw CloudArchiveError.corruptAsset }
+        } else {
+            try files.moveItem(at: staged, to: original)
+            try files.setAttributes([.posixPermissions: 0o400], ofItemAtPath: original.path)
+        }
+        try? files.removeItem(at: directory)
+        return original
+    }
+    func verifyCloudOriginal(_ document: HouseholdDocument, transport: any ArchiveCloudTransport) async throws {
+        let directory = root.appendingPathComponent("Transfers/Verify-\(document.id)")
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("download")
+        try await transport.downloadOriginal(document, to: file)
+        try Task.checkCancellation()
+        guard try hash(file) == document.contentHash else { throw CloudArchiveError.corruptAsset }
+        try? files.removeItem(at: directory)
+    }
     nonisolated func thumbnailURL(for id: UUID) -> URL {
         root.appendingPathComponent("Thumbnails/\(id.uuidString).png")
     }
@@ -205,8 +252,8 @@ actor DocumentStorageManager {
         return identifier
     }
 
-    func prepareOpenCopy(_ document: HouseholdDocument) throws -> URL {
-        let original = try localOriginal(for: document)
+    func prepareOpenCopy(_ document: HouseholdDocument) async throws -> URL {
+        let original = try await localOriginal(for: document)
         let directory = files.temporaryDirectory.appendingPathComponent("StowKit-Open/\(UUID().uuidString)", isDirectory: true)
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(URL(fileURLWithPath: document.originalFilename).lastPathComponent)
@@ -220,6 +267,6 @@ actor DocumentStorageManager {
 enum OriginalAccessError: LocalizedError {
     case missing
     var errorDescription: String? {
-        "The archived original is missing from this Mac. Restore it from your backup. iCloud retrieval is not enabled yet."
+        "The archived original is missing from this Mac. Connect this archive to iCloud or restore the original from your backup."
     }
 }
