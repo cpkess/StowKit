@@ -35,6 +35,9 @@ import CloudKit
                 }
                 catch is CancellationError { break }
                 catch {
+                    #if STOWKIT_LIVE_VERIFICATION
+                    print("STOWKIT_LIVE_ERROR: \(String(reflecting: error))")
+                    #endif
                     onStatus(error.localizedDescription, true)
                     let code = (error as? CKError)?.code
                     if code == .permissionFailure || code == .zoneNotFound || code == .userDeletedZone || code == .notAuthenticated || (error as? CloudArchiveError) == .accountChanged {

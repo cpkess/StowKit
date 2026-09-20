@@ -67,7 +67,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
 
 The XCTest target creates isolated temporary archives and generated fixtures. The tests cover archive integrity, migrations through V8, real PDF/Vision OCR, checkpoint recovery, search ranking and snippets, metadata updates, pagination, journal replay, and cache failure/rebuilding. Sync tests cover coalesced change receipts, stale acknowledgments, fake-transport retry, resumable backfill, atomic incoming pages, persisted conflict resolution, remote document creation, searchable text without original downloads, duplicate imports, read-only access, corrupt downloads, and expired change tokens. A standalone synthetic 50,000-document index benchmark is included; see validation for results and limits.
 
-See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud architecture](docs/ICLOUD_ARCHITECTURE.md), [setup and live acceptance steps](docs/ICLOUD_SETUP.md), and [validation](docs/VALIDATION.md). Fake transport tests do not establish live CloudKit behavior. Automatic local-file eviction, cloud thumbnails, and production deployment remain unfinished.
+See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud architecture](docs/ICLOUD_ARCHITECTURE.md), [setup and live acceptance steps](docs/ICLOUD_SETUP.md), and [validation](docs/VALIDATION.md). Fake transport tests do not establish live CloudKit behavior. The Production schema is deployed and the isolated private-cloud smoke test passes. Two-account household acceptance, automatic local-file eviction, and cloud thumbnails remain unfinished.
 
 ## Development preview releases
 
@@ -80,3 +80,5 @@ scripts/package-dmg.sh /path/to/StowKit.app 0.6.0-alpha.1 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.
+
+For Developer ID signing, Production configuration, and notarization, see the [distribution workflow](docs/DISTRIBUTION.md).

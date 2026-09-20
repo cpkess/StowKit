@@ -1,5 +1,13 @@
 # Validation
 
+## Developer ID and Production CloudKit verification
+
+September 20, 2026: deployed the four StowKit record types from Development to Production in `iCloud.com.stowkit.app` under Gamergrams. Created a Developer ID provisioning profile for the existing Gamergrams certificate; it has `ProvisionsAllDevices = true` and Production iCloud entitlements.
+
+Version 0.6.0 build 3 was archived and exported with Developer ID, hardened runtime, arm64 and x86_64, no debugging entitlement, and no device restriction. The distribution script now derives an xcconfig to force Production in both the app settings and signed entitlements; command-line overrides alone left the local xcconfig's Development value in the app. The corrected export passed all checks in `scripts/build-distribution.sh`. Notarization and release publication are pending explicit approval for the upload to Apple; this is not yet an installability claim.
+
+An explicitly compiled Production runner used an isolated archive and fictional generated data. The first run failed with “Moving downloaded asset failed” during original transfer. A retry with diagnostic reporting passed zone creation, multi-chunk upload, independent hash verification, searchable metadata/text catch-up without materializing the original, byte-identical explicit download, and an edit converging between two local stores. Evidence: `/tmp/stowkit-production-live-retry.log`. This remains a same-Mac, same-account smoke test; two-Mac/two-account sharing and the other acceptance checks below remain unverified. Generated test zones were retained, and no existing user documents were uploaded.
+
 ## v0.6.0-alpha.1 packaging
 
 Built version 0.6.0 (build 2) in Release with Gamergrams development provisioning. The compressed DMG passed `hdiutil verify`; it was mounted read-only and the contained app passed `codesign --verify --deep --strict`. Verified both arm64 and x86_64 architectures, expected version and CloudKit Development bundle settings, and the Applications installation link. The embedded development profile includes one Mac and expires September 19, 2027. This is an unnotarized development prerelease, not general public distribution. Packaging does not resolve the OCR and household acceptance limitations below.
