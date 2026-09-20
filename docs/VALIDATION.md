@@ -1,5 +1,9 @@
 # Validation
 
+## v0.6.0-alpha.1 packaging
+
+Built version 0.6.0 (build 2) in Release with Gamergrams development provisioning. The compressed DMG passed `hdiutil verify`; it was mounted read-only and the contained app passed `codesign --verify --deep --strict`. Verified both arm64 and x86_64 architectures, expected version and CloudKit Development bundle settings, and the Applications installation link. The embedded development profile includes one Mac and expires September 19, 2027. This is an unnotarized development prerelease, not general public distribution. Packaging does not resolve the OCR and household acceptance limitations below.
+
 ## Latest regression status after provisioning
 
 The normal signed Release build succeeds and passes strict code-signature verification. A local copy is available at `build/iCloud-development/StowKit.app` (ignored by Git); it includes the expected container, Development environment, and sharing bundle flag. The cloud test runner is excluded from that build.
