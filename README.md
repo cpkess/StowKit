@@ -1,6 +1,6 @@
 # StowKit
 
-A native, local-first macOS household document archive. **Local archive features and an opt-in CloudKit implementation are present.** Live iCloud and household sharing still require provisioning and acceptance testing; the default build remains local.
+A native, local-first macOS household document archive. **Local archive features and an opt-in CloudKit implementation are present.** Private iCloud passed a live smoke test; household sharing still requires two-account acceptance testing. The default build remains local.
 
 ## Run
 

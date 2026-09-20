@@ -2,7 +2,7 @@
 
 ## Current scope
 
-Milestone 5 adds resumable document understanding to the native archive, OCR pipeline, and full-text index. Manual organization remains available throughout processing. An opt-in CloudKit transport, account binding, remote document/text materialization, and native sharing UI are implemented but await live provisioning and acceptance tests. All OCR and document understanding stay on this Mac.
+Milestone 5 adds resumable document understanding to the native archive, OCR pipeline, and full-text index. Manual organization remains available throughout processing. An opt-in CloudKit transport, account binding, remote document/text materialization, and native sharing UI are implemented. Private-cloud smoke checks pass; household sharing awaits two-account acceptance tests. All OCR and document understanding stay on this Mac.
 
 ## Project structure
 
@@ -122,4 +122,4 @@ Extracted text uses a versioned head pointing to a verified JSON blob (64 MiB ma
 
 Bindings include container, environment, account, archive, zone owner, and database scope. Archive discovery opens separate account-scoped roots. Native invitation-only zone sharing permits read-only/read-write participants; accepting an OS-delivered share opens its archive. Read-only participants fetch but never send; shared archives start suspended until access verification. This UI restriction does not erase already downloaded files on revocation. See the architecture proposal for privacy and retention limits.
 
-Live asset projection, permissions, invitation acceptance, interrupted transfers, quota behavior, and cross-account convergence are **not yet verified**. The transport is covered by a fake-server integration suite; this is not a substitute for CloudKit acceptance. External record deletion pauses sync when reported by the change feed; a full scan after token expiration retains absent local records and is not authoritative deletion reconciliation. Permanent deletion, storage eviction/pin controls, remote thumbnails, collection renaming/merging, and production schema deployment remain outside this implementation.
+A private-cloud smoke test verifies multi-chunk transfer, text catch-up, and bidirectional edits through CloudKit between two local stores. Live network-byte projection, shared permissions, invitation acceptance, interrupted transfers, quota behavior, and cross-account convergence are **not yet verified**. The fake-server integration suite and private smoke run are not substitutes for household acceptance. External record deletion pauses sync when reported by the change feed; a full scan after token expiration retains absent local records and is not authoritative deletion reconciliation. Permanent deletion, storage eviction/pin controls, remote thumbnails, collection renaming/merging, and production schema deployment remain outside this implementation.

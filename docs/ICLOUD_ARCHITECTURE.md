@@ -2,7 +2,7 @@
 
 Design target originally recorded September 14, 2026. The sections below describe the intended architecture and acceptance gates, including features beyond the current implementation.
 
-**Implementation update, September 19:** CloudKit transport, account binding, normalized local collections, incoming documents, text queues, conditional saves, original transfers, conflict review, and native sharing UI now exist. Default builds remain local; live CloudKit is not yet accepted. [Current implementation](ARCHITECTURE.md) is authoritative for implemented behavior; [setup](ICLOUD_SETUP.md) lists the remaining live gates.
+**Implementation update, September 19:** CloudKit transport, account binding, normalized local collections, incoming documents, text queues, conditional saves, original transfers, conflict review, and native sharing UI now exist. Default builds remain local. A signed private-cloud smoke test now passes; cross-account household acceptance remains outstanding. [Current implementation](ARCHITECTURE.md) is authoritative for implemented behavior; [setup](ICLOUD_SETUP.md) lists the remaining live gates.
 
 Differences from the target: deterministic archive/content-derived cloud document IDs replace hash-claim records; memberships travel in document snapshots; conflicts remain local; discovery explicitly enumerates zones rather than maintaining database-change subscriptions. Text generations use one bounded chunked JSON blob. Thumbnails, cache eviction/pin UI, synchronized conflict records, and permanent deletion are not implemented. Collection aliases preserve local names; there is no rename/merge UI. Full scans after expired tokens do not reconcile missing records as deletions.
 

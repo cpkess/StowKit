@@ -7,8 +7,12 @@ struct StowKitApp: App {
     var body: some Scene {
         Window("StowKit", id: "library") {
             Group {
+#if STOWKIT_LIVE_VERIFICATION
+                Color.clear.task { await CloudLiveVerification.run() }
+#else
                 if NSClassFromString("XCTestCase") != nil { Color.clear }
                 else { LibraryView(library: library) }
+#endif
             }
                 .id(library.storage.root)
                 .onReceive(NotificationCenter.default.publisher(for: .stowKitSwitchArchive)) { notification in
