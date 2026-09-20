@@ -69,14 +69,14 @@ The XCTest target creates isolated temporary archives and generated fixtures. Th
 
 See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud architecture](docs/ICLOUD_ARCHITECTURE.md), [setup and live acceptance steps](docs/ICLOUD_SETUP.md), and [validation](docs/VALIDATION.md). Fake transport tests do not establish live CloudKit behavior. The Production schema is deployed and the isolated private-cloud smoke test passes. Two-account household acceptance, automatic local-file eviction, and cloud thumbnails remain unfinished.
 
-## Development preview releases
+## Preview releases
 
-[v0.6.0-alpha.1](https://github.com/cpkess/StowKit/releases/tag/v0.6.0-alpha.1) packages the Gamergrams development-signed iCloud build. It is **not notarized or generally installable**: the embedded profile requires a provisioned Mac. Read the [release notes](docs/releases/v0.6.0-alpha.1.md) for the current OCR and household-sharing limitations.
+[v0.6.0-alpha.2](https://github.com/cpkess/StowKit/releases/tag/v0.6.0-alpha.2) provides a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries. Individual Mac registration is not required. It uses Production CloudKit. Read the [release notes](docs/releases/v0.6.0-alpha.2.md) for the remaining OCR and household-sharing limitations. The earlier alpha.1 asset is a device-restricted development build.
 
 To package an already signed build without changing its signature:
 
 ```sh
-scripts/package-dmg.sh /path/to/StowKit.app 0.6.0-alpha.1 build/releases
+scripts/package-dmg.sh /path/to/StowKit.app 0.6.0-alpha.2 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.
