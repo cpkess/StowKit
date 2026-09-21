@@ -1,5 +1,26 @@
 # Validation
 
+## 1.1.0 release build
+
+September 21, 2026: version 1.1.0, build 7, from `f09cc55`, built with
+`scripts/build-distribution.sh`. All of the script's checks passed. The binary is universal, and
+contains the permanent-deletion code but not the `ArchiveMaintenance` tool (its text is absent).
+Launched against the owner's archive before notarization: over 30 s, 0% CPU, 4 threads, 145 MB,
+and it answered Apple Events; the owner's document rendered.
+
+That launch also showed **iCloud off for the owner's archive** (Settings: "iCloud is off"). This
+is the 1.0.0 archive-switch bug, fixed in 1.1.0: opening the test archive had called `pauseCloud()`
+and disabled it. The owner's iCloud zone still exists; re-enabling was left to the owner.
+
+Apple accepted notarization of the app (`f0a36df9-a2d0-43c3-baa0-5f0c345a68f5`) and of the signed
+DMG (`25a176a2-b8c5-4886-88b9-764f565896d1`). Both were stapled and assessed as Notarized Developer
+ID. The mounted DMG holds the Applications link and StowKit 1.1.0 (7), Production, with a valid
+signature, a stapled ticket, and Gatekeeper acceptance. The sidecar was regenerated after
+stapling. **DMG SHA-256: `cff1fa0848412821487e6506555f562faa9458eda7b48958217404ed1be4d7cc`.**
+
+**Not established.** The same limits as 1.0.0, plus permanent deletion and the archive picker
+untested on a second Mac or against live deletions.
+
 ## Leftover iCloud test archives identified
 
 September 21, 2026, `ArchiveMaintenance` dry run against the owner's Production iCloud. Three
