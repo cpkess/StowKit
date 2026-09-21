@@ -1,5 +1,25 @@
 # Validation
 
+## Inbox folder from a phone, and overlapping list rows
+
+September 21, 2026, 1.2.0 (8) test build, owner's archive. The owner chose an iCloud Drive folder
+(`iCloud Drive/StowKit/Inbox`) in Settings and added a document from their iPhone; it was imported,
+its text read, and Apple Intelligence titled it ("Order confirmation for PRL x TÓPA", sender
+filled). Three more followed the same way. The owner reported that the file names in the Inbox list
+overlapped. Not seen directly: by the time of the screenshot the rows had re-laid out. The likely
+cause, from code: the row grew a line when the model's title and sender replaced the one-line
+filename title, and the macOS list did not re-measure a row whose content changed in place.
+
+Fix: a row's height no longer depends on its content. The title reserves two lines, the sender line
+is always present, and the search excerpt's three lines are reserved only while searching; the list
+is rebuilt when searching starts or stops, the one remaining height change. On a rebuilt signed test
+build, the five rows in Recent were all one height with no overlap, and a search for "receipt" showed
+two rows with excerpts, also without overlap. Full suite: 130 tests, the same 6 Vision failures.
+
+**Not established.** The overlap itself was never reproduced, so the fix is checked against the
+explanation, not against the original symptom; a new import arriving while the Inbox list is
+visible has not been watched with this build.
+
 ## 1.2.0 test build on the owner's real archive
 
 September 21, 2026: version 1.2.0, build 8, built with `scripts/build-distribution.sh` (Developer ID,

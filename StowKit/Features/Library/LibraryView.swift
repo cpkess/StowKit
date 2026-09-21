@@ -91,7 +91,7 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", searching: !library.search.isEmpty, analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
@@ -116,6 +116,8 @@ struct LibraryView: View {
                     }.onDeleteCommand {
                         if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
+                    // Row heights differ only between browsing and searching; rebuild when that flips.
+                    .id(library.search.isEmpty)
                 }
                 if library.destination == .trash && !library.visibleDocuments.isEmpty && library.search.isEmpty {
                     Button("Empty Trash…", role: .destructive) { pendingDeletion = library.trashedDocumentIDs() }
@@ -285,6 +287,7 @@ private struct DocumentRow: View {
     let thumbnails: ThumbnailService
     let processing: ProcessingSnapshot?
     let snippet: String
+    let searching: Bool
     let analysis: AnalysisSnapshot?
     /// nil when the archive is not in iCloud, so the badge never appears for local archives.
     let downloaded: Bool?
@@ -311,18 +314,20 @@ private struct DocumentRow: View {
             }.frame(width: 30, height: 40).padding(.top, 3).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(document.title).font(.headline).lineLimit(2)
+                    // The list doesn't re-measure a row whose content changes in place, so a
+                    // title or sender arriving after import must not change the row's height.
+                    Text(document.title).font(.headline).lineLimit(2, reservesSpace: true)
                     if document.favorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow).accessibilityLabel("Favorite") }
                     if downloaded == false {
                         Image(systemName: "icloud.and.arrow.down").font(.caption2).foregroundStyle(.secondary)
                             .help("In iCloud — downloads when opened").accessibilityLabel("Not downloaded")
                     }
                 }
-                if !document.correspondent.isEmpty {
-                    Text(document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                }
-                if !snippet.isEmpty {
-                    highlightedSnippet.font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                Text(document.correspondent.isEmpty ? " " : document.correspondent)
+                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    .accessibilityHidden(document.correspondent.isEmpty)
+                if searching {
+                    highlightedSnippet.font(.caption).foregroundStyle(.secondary).lineLimit(3, reservesSpace: true)
                 }
                 HStack {
                     Text(document.documentDate, format: .dateTime.month(.abbreviated).day().year())
