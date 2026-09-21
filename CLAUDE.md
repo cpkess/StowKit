@@ -130,6 +130,9 @@ scripts/notarize.sh build/releases/StowKit-<version>.dmg <keychain-profile>
 ```
 
 Sign the DMG before notarizing it. The notarytool keychain profile in use is named `AbleKit`.
+**Regenerate the `.sha256` sidecar after stapling** (`shasum -a 256 X.dmg > X.dmg.sha256`):
+`package-dmg.sh` writes it before signing and stapling change the file, so as written it is
+stale and every downloader's check fails.
 `build/` is gitignored. Full walkthrough: `docs/DISTRIBUTION.md`.
 
 Gotcha Codex hit: command-line `STOWKIT_CLOUD_ENVIRONMENT=Production` overrides alone left the

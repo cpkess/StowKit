@@ -1,5 +1,30 @@
 # Validation
 
+## 1.0.0 release build
+
+September 21, 2026: version 1.0.0, build 6, from `8ac44a1`, built with
+`scripts/build-distribution.sh` and the installed Developer ID profile. The script's checks all
+passed: Developer ID authority, hardened runtime, Production in both entitlements and Info.plist,
+no device restriction, and no debugging entitlement. The binary is universal (arm64, x86_64), and
+contains no `PDFView` symbols.
+
+Before notarization, the exported app was launched against the owner's archive. Over 45 s: 0% CPU,
+4 threads, 148 MB, and it answered Apple Events. The preview rendered; the details-pane fixes were
+present. Settings showed iCloud "Up to date" on Production, and **Remove Download** and **Keep
+Downloaded** appeared once iCloud was connected. Remove Download was not pressed on the owner's
+document.
+
+Apple accepted notarization of the app (`0b688a9c-d450-49e5-ac08-61223ec74b98`) and of the signed
+DMG (`88a23663-48f0-4c5e-a8c2-685e0849d2c0`); both tickets were stapled and assessed by Gatekeeper
+as Notarized Developer ID. The DMG was then mounted read-only: it holds the Applications link and
+StowKit 1.0.0 (6), Production, with a valid signature, a stapled ticket, and Gatekeeper
+acceptance. The checksum sidecar that `package-dmg.sh` writes becomes stale once the DMG is signed
+and stapled (`962a1d74…` against the final `36e3d07b…`), so it was regenerated after stapling and
+verified. **DMG SHA-256: `36e3d07b1e69ba6b9f57bc8970f26e6f9606a6ff7656cda2cc8c09c7ea8b5fb4`.**
+
+**Not established.** The release has not run on a second Mac, on Intel hardware, or on macOS
+14–26. Household sharing remains untested across two accounts, as the release notes say first.
+
 ## Interface fixes, filename metadata, and Apple Intelligence on medical records
 
 September 21, 2026, macOS 27.0 (26A428), Apple M2 Max, the owner's archive in the running app.
