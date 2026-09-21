@@ -129,6 +129,15 @@ actor DocumentStorageManager {
         return reclaimed
     }
 
+    /// Remove a permanently deleted document's files. Only called from the repository's durable
+    /// purge list, after the document's rows are gone; files already missing count as removed.
+    func purgeFiles(relativePath: String, documentID: UUID) throws {
+        downloads[documentID]?.cancel()
+        let urls = [try? originalURL(for: relativePath), thumbnailURL(for: documentID),
+                    root.appendingPathComponent("Transfers/\(documentID)")].compactMap { $0 }
+        for url in urls where files.fileExists(atPath: url.path) { try files.removeItem(at: url) }
+    }
+
     /// Walk the archive and report allocated bytes per category. Deliberately measures the disk
     /// rather than summing recorded document sizes, which count documents that are trashed or
     /// have never been downloaded. Callers treat this as a report, not as a cached value.

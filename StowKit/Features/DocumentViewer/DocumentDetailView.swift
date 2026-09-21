@@ -18,6 +18,7 @@ struct DocumentDetailView: View {
     let storageError: String?
     let setPinned: (Bool) -> Void
     let removeDownload: () -> Void
+    let deletePermanently: () -> Void
     @State private var showDetails = true
     @State private var showMore = false
     @State private var quickLookURL: URL?
@@ -44,7 +45,12 @@ struct DocumentDetailView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             if document.trashedAt != nil {
                                 banner(symbol: "trash", tint: .secondary, title: "In Trash",
-                                       detail: "Restore it to organize it again.") { Button("Restore", action: trashOrRestore) }
+                                       detail: "Restore it to organize it again, or delete it for good.") {
+                                    HStack {
+                                        Button("Delete Permanently…", role: .destructive, action: deletePermanently)
+                                        Button("Restore", action: trashOrRestore)
+                                    }
+                                }
                             } else if document.needsReview {
                                 banner(symbol: "circle.fill", tint: .orange, title: "Needs review",
                                        detail: "Check the title, date, and collection, then mark it reviewed.") {

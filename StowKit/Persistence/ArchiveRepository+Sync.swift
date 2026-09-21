@@ -61,6 +61,12 @@ extension ArchiveRepository {
         try journal(key: key, values: values, manualFields: manual)
     }
 
+    /// Replace the document's snapshot with a content-free tombstone (see `SyncMetadata.isTombstone`).
+    func journalTombstone(documentID: UUID, contentHash: String) throws {
+        let values: [String: SyncValue] = ["id": .text(documentID.uuidString), "contentHash": .text(contentHash), "deleted": .flag(true)]
+        try journal(key: "document:\(documentID.uuidString)", values: values, manualFields: Set(values.keys))
+    }
+
     private func journal(key: String, values: [String: SyncValue], manualFields: Set<String>) throws {
         let existing = try syncRecord(key)
         let previous = try existing.map { try JSONDecoder().decode(SyncMetadata.self, from: $0.payload) }

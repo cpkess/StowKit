@@ -64,6 +64,7 @@ import CloudKit
         while try writable && !repository.backfillSyncBatch() { try Task.checkCancellation(); await Task.yield() }
         onStatus("Receiving changes…", false)
         try await receive()
+        try await purge()
         onUpdate()
         while writable && !Task.isCancelled {
             let operations = try repository.pendingSyncOperations()
@@ -122,7 +123,23 @@ import CloudKit
             }
             await Task.yield()
         }
+        try await purge()
         try Task.checkCancellation(); onUpdate()
+    }
+    /// Finish permanent deletions: local files for documents gone from the database, and iCloud
+    /// content once each tombstone has been accepted. Both lists are durable and retried here.
+    private func purge() async throws {
+        for item in try repository.pendingFilePurges() {
+            try await storage.purgeFiles(relativePath: item.relativePath, documentID: item.id)
+            try repository.completeFilePurge(item.id)
+        }
+        guard writable else { return }
+        for item in try repository.pendingCloudPurges() {
+            try Task.checkCancellation()
+            onStatus("Removing deleted documents from iCloud…", false)
+            try await transport.deleteContent(hash: item.hash, keepText: item.keepText)
+            try repository.completeCloudPurge(item.hash)
+        }
     }
     private func receive() async throws {
         var resetHistory = false

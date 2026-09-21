@@ -334,6 +334,104 @@ import SQLite3
         XCTAssertGreaterThan(after.derived, 0, "text, thumbnail, and database remain")
     }
 
+    // MARK: Permanent deletion
+
+    private func trash(_ repository: ArchiveRepository, _ id: UUID) throws {
+        var document = try XCTUnwrap(repository.document(id)); document.trashedAt = Date()
+        try repository.update(document)
+    }
+    private func cloudKey(_ repository: ArchiveRepository, _ document: HouseholdDocument) -> String {
+        "document:\(CloudDocumentIdentity.id(archive: repository.archiveID, hash: document.contentHash))"
+    }
+
+    func testPermanentDeleteOnlyAcceptsDocumentsInTrash() throws {
+        let a = try archive("A"), doc = try seed(a, name: "A")
+        XCTAssertThrowsError(try a.permanentlyDelete([doc.id])) { XCTAssertEqual($0 as? ArchiveRepository.DeletionError, .notInTrash) }
+        XCTAssertNotNil(try a.document(doc.id), "a refused deletion changes nothing")
+        XCTAssertTrue(try a.pendingFilePurges().isEmpty)
+    }
+
+    func testPermanentDeleteRemovesDocumentHereInICloudAndOnOtherMacs() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A", text: "Fictional deletable water bill")
+        let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()
+        let (ca, storageA, readerA) = try await coordinator(a, name: "A", server: server); await sync(ca)
+        let (cb, storageB, _) = try await coordinator(b, name: "B", server: server); await sync(cb)
+        let received = try XCTUnwrap(b.matching(hash: doc.contentHash))
+        _ = try await storageB.localOriginal(for: received)   // B has downloaded it too
+        let originalA = try storageA.originalURL(for: doc.relativePath)
+        let originalB = try storageB.originalURL(for: received.relativePath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: originalB.path))
+
+        try trash(a, doc.id)
+        try a.permanentlyDelete([doc.id])
+        XCTAssertNil(try a.document(doc.id))
+        XCTAssertEqual(try a.pendingFilePurges().map(\.id), [doc.id], "file removal is queued durably")
+        await sync(ca)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalA.path))
+        XCTAssertTrue(try a.pendingFilePurges().isEmpty)
+        let hits = try await readerA.search("deletable", destination: .trash, newestFirst: true)
+        XCTAssertEqual(hits.total, 0, "gone from search")
+        let serverRecord = await server.metadata(cloudKey(a, doc))
+        let tombstone = try XCTUnwrap(serverRecord)
+        XCTAssertTrue(tombstone.isTombstone)
+        XCTAssertEqual(Set(tombstone.fields.keys), ["id", "contentHash", "deleted"], "no title, text, or name left in iCloud")
+        let originalInCloud = await server.hasOriginal(doc.contentHash)
+        XCTAssertFalse(originalInCloud, "the file's content is deleted from iCloud")
+        XCTAssertTrue(try a.pendingCloudPurges().isEmpty)
+
+        await sync(cb)
+        XCTAssertNil(try b.matching(hash: doc.contentHash), "the other Mac removes its copy")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalB.path))
+    }
+
+    func testStaleEditOnAnotherMacCannotResurrectADeletedDocument() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A")
+        let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()
+        let (ca, _, _) = try await coordinator(a, name: "A", server: server); await sync(ca)
+        let (cb, _, _) = try await coordinator(b, name: "B", server: server); await sync(cb)
+        var stale = try XCTUnwrap(b.matching(hash: doc.contentHash)); stale.summary = "Edited offline before the deletion"
+        try b.update(stale)   // pending on B, not yet sent
+
+        try trash(a, doc.id); try a.permanentlyDelete([doc.id]); await sync(ca)
+        await sync(cb)
+        XCTAssertNil(try b.matching(hash: doc.contentHash))
+        let afterStaleEdit = await server.metadata(cloudKey(a, doc))
+        XCTAssertTrue(try XCTUnwrap(afterStaleEdit).isTombstone, "the edit did not recreate it")
+        XCTAssertTrue(try b.pendingSyncOperations().filter { $0.metadata.recordKey.hasPrefix("document:") }.isEmpty)
+    }
+
+    func testConcurrentEditLosesToAPermanentDeletion() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A")
+        let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()
+        let (ca, _, _) = try await coordinator(a, name: "A", server: server); await sync(ca)
+        let (cb, _, _) = try await coordinator(b, name: "B", server: server); await sync(cb)
+        try trash(a, doc.id); try a.permanentlyDelete([doc.id])   // A's tombstone is pending...
+        var edited = try XCTUnwrap(b.matching(hash: doc.contentHash)); edited.summary = "Saved first"
+        try b.update(edited); await sync(cb)                       // ...while B's edit reaches iCloud first
+
+        await sync(ca); await sync(ca)   // conflict, then resend with the newer change tag
+        let afterRace = await server.metadata(cloudKey(a, doc))
+        XCTAssertTrue(try XCTUnwrap(afterRace).isTombstone, "delete wins")
+        XCTAssertNil(try a.matching(hash: doc.contentHash), "the conflict did not recreate it on the deleting Mac")
+        await sync(cb)
+        XCTAssertNil(try b.matching(hash: doc.contentHash))
+    }
+
+    func testPermanentDeleteWorksWithoutICloud() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A")
+        let storage = DocumentStorageManager(root: root.appendingPathComponent("A"))
+        let original = try storage.originalURL(for: doc.relativePath)
+        try trash(a, doc.id); try a.permanentlyDelete([doc.id])
+        for item in try a.pendingFilePurges() {
+            try await storage.purgeFiles(relativePath: item.relativePath, documentID: item.id)
+            try a.completeFilePurge(item.id)
+        }
+        XCTAssertNil(try a.document(doc.id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.path))
+        XCTAssertTrue(try a.pendingFilePurges().isEmpty)
+    }
+
     func testBadRemoteIdentityRollsBackNewDocumentAndToken() throws {
         let a = try archive("A"), doc = try seed(a, name: "A"), b = try archive("B", joining: a.archiveID)
         let operation = try XCTUnwrap(a.pendingSyncOperations().first)
@@ -398,4 +496,12 @@ private actor FakeArchiveCloud: ArchiveCloudTransport {
     func downloadText(_ head: CloudTextHead) async throws -> [CloudTextPage] {
         guard let pages = text[head.blobHash] else { throw CloudArchiveError.missingResult }; return pages
     }
+    private(set) var deletedContent: [String] = []
+    func deleteContent(hash: String, keepText: Bool) async throws {
+        originals[hash] = nil
+        deletedContent.append(hash)
+    }
+    func hasOriginal(_ hash: String) -> Bool { originals[hash] != nil }
+    /// The latest server snapshot for a record, to check what iCloud actually holds.
+    func metadata(_ key: String) -> SyncMetadata? { rows[key]?.metadata }
 }

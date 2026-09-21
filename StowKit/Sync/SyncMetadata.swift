@@ -19,6 +19,13 @@ enum SyncValue: Codable, Equatable, Sendable {
     case text(String), flag(Bool), date(Date), integer(Int64), null
 }
 
+extension SyncMetadata {
+    /// A permanently deleted document: only `id`, `contentHash`, and `deleted` survive, so no
+    /// title, text, or other content remains in iCloud. Tombstones stop a Mac that missed the
+    /// deletion from recreating the record, which deleting it outright would allow.
+    var isTombstone: Bool { recordKey.hasPrefix("document:") && fields["deleted"]?.value == .flag(true) }
+}
+
 struct SyncOperation: Codable, Equatable, Sendable, Identifiable {
     let id: UUID
     let metadata: SyncMetadata

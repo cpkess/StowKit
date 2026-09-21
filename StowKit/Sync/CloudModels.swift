@@ -50,6 +50,8 @@ protocol ArchiveCloudTransport: Sendable {
     func uploadText(_ document: HouseholdDocument, pages: [CloudTextPage]) async throws
     func downloadText(_ head: CloudTextHead) async throws -> [CloudTextPage]
     func downloadOriginal(_ document: HouseholdDocument, to url: URL) async throws
+    /// Remove a permanently deleted document's content. Missing records count as already gone.
+    func deleteContent(hash: String, keepText: Bool) async throws
 }
 
 struct CloudTextHead: Codable, Sendable {

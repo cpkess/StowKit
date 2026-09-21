@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var dropTargeted = false
     @State private var showCollectionSheet = false
     @State private var collectionName = ""
+    @State private var pendingDeletion: [UUID] = []
 
     var body: some View {
         if library.cloudAccessSuspended {
@@ -47,7 +48,7 @@ struct LibraryView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 260)
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    Label("On My Mac", systemImage: "externaldrive")
+                    ArchivePicker(library: library)
                     Spacer()
                     Button { showCollectionSheet = true } label: { Image(systemName: "plus") }
                         .buttonStyle(.borderless).help("New Collection")
@@ -81,7 +82,7 @@ struct LibraryView: View {
                     ContentUnavailableView {
                         Label(library.search.isEmpty ? "No Documents" : "No Results", systemImage: library.search.isEmpty ? "tray" : "magnifyingglass")
                     } description: {
-                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, sender, tag, or words inside a document.")
+                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents in Trash stay here until you restore them or delete them permanently." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, sender, tag, or words inside a document.")
                     } actions: {
                         if library.search.isEmpty && library.destination != .trash {
                             Button("Import Documents") { showImporter = true }
@@ -90,15 +91,23 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selection) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", analysis: library.analysis[document.id]).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
                                     }
                                     Button("Open a Copy", systemImage: "arrow.up.forward.app") { library.openCopy(document) }
+                                    if library.cloudEnabled && document.trashedAt == nil {
+                                        if library.isDownloaded(document) {
+                                            Button("Remove Download", systemImage: "icloud") { library.removeDownload(document.id) }
+                                        } else {
+                                            Button("Download Now", systemImage: "icloud.and.arrow.down") { library.download(document.id) }
+                                        }
+                                    }
                                     Divider()
                                     if document.trashedAt != nil {
                                         Button("Restore", systemImage: "arrow.uturn.backward") { library.restore(document.id) }
+                                        Button("Delete Permanently…", systemImage: "xmark.bin", role: .destructive) { pendingDeletion = [document.id] }
                                     } else {
                                         Button("Move to Trash", systemImage: "trash", role: .destructive) { library.moveToTrash(document.id) }
                                     }
@@ -107,6 +116,10 @@ struct LibraryView: View {
                     }.onDeleteCommand {
                         if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
+                }
+                if library.destination == .trash && !library.visibleDocuments.isEmpty && library.search.isEmpty {
+                    Button("Empty Trash…", role: .destructive) { pendingDeletion = library.trashedDocumentIDs() }
+                        .padding(8)
                 }
                 if library.hasMore {
                     Button(library.isLoadingMore ? "Loading…" : "Load More") { library.loadMore() }
@@ -151,7 +164,8 @@ struct LibraryView: View {
                     storageState: library.storageState?.documentID == document.id ? library.storageState : nil,
                     storageError: library.storageError,
                     setPinned: { library.setPinned(document.id, $0) },
-                    removeDownload: { library.removeDownload(document.id) })
+                    removeDownload: { library.removeDownload(document.id) },
+                    deletePermanently: { pendingDeletion = [document.id] })
                     .id(document.id)
                     // iCloud connects after launch; re-derive when it does so the controls appear.
                     .task(id: "\(document.id)|\(library.cloudEnabled)|\(library.cloudReadOnly)|\(library.cloudAccessSuspended)") {
@@ -176,6 +190,17 @@ struct LibraryView: View {
             }
         }
         .task { await library.start() }
+        .confirmationDialog(deletionTitle, isPresented: Binding(get: { !pendingDeletion.isEmpty }, set: { if !$0 { pendingDeletion = [] } }),
+                            titleVisibility: .visible) {
+            Button(pendingDeletion.count == 1 ? "Delete Permanently" : "Delete \(pendingDeletion.count) Documents", role: .destructive) {
+                library.deletePermanently(pendingDeletion); pendingDeletion = []
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = [] }
+        } message: {
+            Text(library.cloudEnabled
+                 ? "This removes it from iCloud and from every Mac that uses this archive. You can’t undo this."
+                 : "This removes it from this Mac. You can’t undo this.")
+        }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: DocumentStorageManager.supportedTypes, allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls): library.enqueueImports(urls)
@@ -243,12 +268,20 @@ struct LibraryView: View {
     }
 }
 
+private extension LibraryView {
+    var deletionTitle: String {
+        pendingDeletion.count == 1 ? "Delete this document permanently?" : "Delete \(pendingDeletion.count) documents permanently?"
+    }
+}
+
 private struct DocumentRow: View {
     let document: HouseholdDocument
     let thumbnails: ThumbnailService
     let processing: ProcessingSnapshot?
     let snippet: String
     let analysis: AnalysisSnapshot?
+    /// nil when the archive is not in iCloud, so the badge never appears for local archives.
+    let downloaded: Bool?
     @State private var thumbnail: NSImage?
     private var highlightedSnippet: Text {
         var result = Text("")
@@ -274,6 +307,10 @@ private struct DocumentRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(document.title).font(.headline).lineLimit(2)
                     if document.favorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow).accessibilityLabel("Favorite") }
+                    if downloaded == false {
+                        Image(systemName: "icloud.and.arrow.down").font(.caption2).foregroundStyle(.secondary)
+                            .help("In iCloud — downloads when opened").accessibilityLabel("Not downloaded")
+                    }
                 }
                 if !document.correspondent.isEmpty {
                     Text(document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

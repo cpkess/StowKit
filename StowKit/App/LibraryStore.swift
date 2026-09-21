@@ -136,6 +136,72 @@ final class LibraryStore {
         if let accountObserver { NotificationCenter.default.removeObserver(accountObserver); self.accountObserver = nil }
     }
     func syncNow() { cloudCoordinator?.schedule() }
+
+    // MARK: Archive switching
+
+    /// This Mac's own archive can also appear in the iCloud list once iCloud is on. Remembering its
+    /// ID lets the picker show it once, instead of offering to open a second local copy of it.
+    static let thisMacArchiveKey = "StowKitThisMacArchiveID"
+    private var isThisMacArchive: Bool { storage.root.standardizedFileURL == DocumentStorageManager.defaultRoot.standardizedFileURL }
+    private var thisMacArchiveID: UUID? {
+        if isThisMacArchive, let repository { return repository.archiveID }
+        return UserDefaults.standard.string(forKey: Self.thisMacArchiveKey).flatMap(UUID.init(uuidString:))
+    }
+    var currentArchive: ArchiveChoice { archiveChoices.first(where: \.isCurrent) ?? thisMacChoice(current: true) }
+    var archiveChoices: [ArchiveChoice] {
+        var choices = [thisMacChoice(current: isThisMacArchive)]
+        let currentID = repository?.archiveID
+        for binding in cloudArchives where binding.archiveID != thisMacArchiveID {
+            let short = String(binding.archiveID.uuidString.prefix(4))
+            choices.append(ArchiveChoice(id: binding.zoneName, kind: binding.shared ? .shared : .iCloud,
+                title: binding.shared ? "Shared Household \(short)" : "iCloud Archive \(short)",
+                subtitle: binding.shared ? "Shared with you" : "Stored in iCloud",
+                isCurrent: !isThisMacArchive && binding.archiveID == currentID, binding: binding))
+        }
+        // The archive in use must always be listed, even before iCloud archives are fetched.
+        if !isThisMacArchive, !choices.contains(where: \.isCurrent), let binding = try? repository?.cloudBinding()?.0 {
+            choices.append(ArchiveChoice(id: binding.zoneName, kind: binding.shared ? .shared : .iCloud,
+                title: binding.shared ? "Shared Household" : "iCloud Archive", subtitle: "Stored in iCloud",
+                isCurrent: true, binding: binding))
+        }
+        return choices
+    }
+    private func thisMacChoice(current: Bool) -> ArchiveChoice {
+        let syncing = current ? cloudEnabled : false
+        return ArchiveChoice(id: "this-mac", kind: syncing ? .iCloud : .thisMac,
+            title: syncing ? "My Archive" : "On My Mac",
+            subtitle: syncing ? "In iCloud, with copies on this Mac" : "Stored on this Mac",
+            isCurrent: current, binding: nil)
+    }
+    func switchArchive(to choice: ArchiveChoice) async {
+        guard !choice.isCurrent else { return }
+        if let binding = choice.binding { await openCloudArchive(binding); return }
+        await pauseCloudTransportForSwitch()
+        UserDefaults.standard.removeObject(forKey: "StowKitArchiveRoot")
+        NotificationCenter.default.post(name: .stowKitSwitchArchive, object: DocumentStorageManager.defaultRoot)
+    }
+    /// Stop sync and background work before switching, without turning iCloud off for this archive.
+    private func pauseCloudTransportForSwitch() async {
+        cloudTimer?.cancel(); cloudTimer = nil
+        await cloudCoordinator?.stop(); cloudCoordinator = nil
+        await processor?.stop(); await intelligenceProcessor?.stop()
+    }
+
+    // MARK: Local copies (iCloud Drive–style)
+
+    /// Cheap enough for list rows: a single file-existence check, no reads.
+    func isDownloaded(_ document: HouseholdDocument) -> Bool {
+        guard let url = try? storage.originalURL(for: document.relativePath) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+    func download(_ id: UUID) {
+        guard let document = try? repository?.document(id) else { return }
+        storageError = nil
+        Task {
+            do { _ = try await storage.localOriginal(for: document); refreshStorageState(id); refreshTextSearch(resetLimit: false) }
+            catch { storageError = error.localizedDescription }
+        }
+    }
     func findCloudArchives() async {
         cloudBusy = true; defer { cloudBusy = false }
         do { cloudArchives = try await CloudSetup.archives() }
@@ -143,7 +209,8 @@ final class LibraryStore {
     }
     func openCloudArchive(_ binding: CloudArchiveBinding) async {
         do {
-            await pauseCloud(); await processor?.stop(); await intelligenceProcessor?.stop()
+            // Stop sync without `pauseCloud()`, which would turn iCloud off for the archive being left.
+            await pauseCloudTransportForSwitch()
             let root = try CloudSetup.prepareArchive(binding)
             NotificationCenter.default.post(name: .stowKitSwitchArchive, object: root)
         } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
@@ -197,6 +264,8 @@ final class LibraryStore {
             }
             // Best effort: it rolls back on failure and simply runs again on the next launch.
             try? repository.refreshAutomaticMetadataOnce()
+            if isThisMacArchive { UserDefaults.standard.set(repository.archiveID.uuidString, forKey: Self.thisMacArchiveKey) }
+            await purgeDeletedFiles()
             collections = try repository.collections()
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
@@ -283,6 +352,29 @@ final class LibraryStore {
             let manageable = cloudEnabled && !cloudReadOnly && !cloudAccessSuspended && facts?.sharedArchive == false
             storageState = DocumentStorageState(documentID: id, location: location,
                                                 pinned: facts?.pinned ?? false, manageable: manageable)
+        }
+    }
+    /// Irreversible: removes documents in Trash from this Mac and, once synced, from iCloud and
+    /// every other Mac. The views confirm before calling this.
+    func deletePermanently(_ ids: [UUID]) {
+        guard let repository, !ids.isEmpty else { return }
+        do { try repository.permanentlyDelete(ids) }
+        catch { errorMessage = "The documents could not be deleted.\n\n\(error.localizedDescription)"; return }
+        if let selection, ids.contains(selection) { self.selection = nil; selectedOverride = nil }
+        refreshTextSearch(resetLimit: false)
+        Task { await purgeDeletedFiles(); cloudCoordinator?.schedule() }
+    }
+    /// Every document in Trash, not just the page the list has loaded.
+    func trashedDocumentIDs() -> [UUID] {
+        ((try? repository?.documents()) ?? []).filter { $0.trashedAt != nil }.map(\.id)
+    }
+    private func purgeDeletedFiles() async {
+        guard let repository, let purges = try? repository.pendingFilePurges() else { return }
+        for item in purges {
+            do {
+                try await storage.purgeFiles(relativePath: item.relativePath, documentID: item.id)
+                try repository.completeFilePurge(item.id)
+            } catch { continue }   // left on the list; retried on the next launch or sync
         }
     }
     func moveToTrash(_ id: UUID) {

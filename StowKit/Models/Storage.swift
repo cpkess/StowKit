@@ -38,6 +38,22 @@ enum OriginalLocation: Sendable, Equatable {
     case cloudOnly
 }
 
+/// One archive the owner can switch to from the sidebar. `binding` is nil for this Mac's own
+/// archive, which is opened from its fixed location rather than prepared from iCloud.
+struct ArchiveChoice: Identifiable, Equatable {
+    enum Kind: Equatable { case thisMac, iCloud, shared }
+    let id: String
+    let kind: Kind
+    let title: String
+    let subtitle: String
+    let isCurrent: Bool
+    let binding: CloudArchiveBinding?
+
+    var symbol: String {
+        switch kind { case .thisMac: "externaldrive"; case .iCloud: "icloud"; case .shared: "person.2" }
+    }
+}
+
 /// What the inspector shows for one document's original.
 struct DocumentStorageState: Sendable, Equatable {
     let documentID: UUID

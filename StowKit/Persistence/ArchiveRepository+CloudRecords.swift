@@ -70,7 +70,7 @@ extension ArchiveRepository {
             let id = CloudDocumentIdentity.id(archive: archiveID, hash: hash)
             metadata = SyncMetadata(archiveID: archiveID, recordKey: "document:\(id)", fields: metadata.fields)
             metadata.fields["id"]?.value = .text(id.uuidString)
-            if let state {
+            if let state, !operation.metadata.isTombstone {
                 let original = try JSONDecoder().decode(SyncMetadata.self, from: state.wireMetadata)
                 for key in ["originalFilename", "importedAt"] { metadata.fields[key] = original.fields[key] }
             }
@@ -128,6 +128,7 @@ extension ArchiveRepository {
             let ordered = page.records.sorted { $0.metadata.recordKey.hasPrefix("collection:") && !$1.metadata.recordKey.hasPrefix("collection:") }
             var localized: [SyncMetadata] = []
             for record in ordered {
+                if record.metadata.isTombstone { try applyIncomingTombstone(record.metadata); continue }
                 let metadata = try localizeCloudRecord(record.metadata)
                 localized.append(metadata)
                 try storeCloudState(record, key: metadata.recordKey)
@@ -149,6 +150,17 @@ extension ArchiveRepository {
                 if let baseline = try serverBaseline(sent.metadata.recordKey) { baseline.payload = data }
                 else { context.insert(Baseline(key: sent.metadata.recordKey, payload: data)) }
                 try acknowledgeSyncOperations([sent.id])
+                tombstoneAccepted(sent.metadata)
+            } else if let conflict = result.conflict, conflict.metadata.isTombstone {
+                // Already deleted in iCloud, possibly by our own save whose response was lost.
+                try applyIncomingTombstone(conflict.metadata)
+                tombstoneAccepted(conflict.metadata)
+                try save()
+            } else if let conflict = result.conflict, sent.metadata.isTombstone {
+                // Someone edited it concurrently. Keep the newer change tag and resend: delete wins,
+                // rather than recreating a document the owner just deleted permanently.
+                try storeCloudState(conflict, key: sent.metadata.recordKey)
+                try save()
             } else if let conflict = result.conflict {
                 let local = try localizeCloudRecord(conflict.metadata)
                 try storeCloudState(conflict, key: local.recordKey)

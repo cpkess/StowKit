@@ -79,7 +79,10 @@ actor CloudKitArchiveTransport: ArchiveCloudTransport {
         }
         let result = try await database.recordZoneChanges(inZoneWith: zoneID, since: previous,
             desiredKeys: Self.metadataKeys, resultsLimit: 64)
-        guard result.deletions.isEmpty else { throw CloudArchiveError.unsupportedDeletion }
+        // Content records (chunks, manifests, text) are deleted after a permanent deletion's
+        // tombstone; they carry no metadata, so skipping them is correct. Metadata records are
+        // never deleted — deletions travel as tombstones — so one vanishing is still an error.
+        guard result.deletions.allSatisfy({ $0.recordType != "StowMetadata" }) else { throw CloudArchiveError.unsupportedDeletion }
         var records: [CloudRecordSnapshot] = []
         var textHeads: [CloudTextHead] = []
         for (_, modification) in result.modificationResultsByID {
@@ -200,6 +203,43 @@ actor CloudKitArchiveTransport: ArchiveCloudTransport {
         let pages = try JSONDecoder().decode([CloudTextPage].self, from: Data(contentsOf: file))
         guard pages.count <= 100_000, pages.enumerated().allSatisfy({ $0.offset == $0.element.index }) else { throw SyncRecoveryError.invalidPayload }
         return pages
+    }
+    /// Delete a permanently deleted document's content from iCloud: its original's chunks and
+    /// manifest, its text head, and its text blob unless the text was empty. Chunks go before the
+    /// manifest that lists them, so an interrupted run can still find them to retry.
+    func deleteContent(hash: String, keepText: Bool) async throws {
+        try await verifyAccount()
+        var chunks: [CKRecord.ID] = [], heads: [CKRecord.ID] = []
+        let original = try await originalRecords(hash)
+        chunks += original.chunks; heads += original.manifest
+        let textID = recordID("text:\(hash)")
+        if let text = try await existingRecord(textID, keys: ["textHead"]) {
+            heads.append(textID)
+            // Identical text makes an identical, shared blob; empty text is the common case, so keep it.
+            if !keepText, let data = text.encryptedValues["textHead"] as? Data,
+               let head = try? JSONDecoder().decode(CloudTextHead.self, from: data) {
+                let blob = try await originalRecords(head.blobHash)
+                chunks += blob.chunks; heads += blob.manifest
+            }
+        }
+        try await deleteRecords(chunks)
+        try await deleteRecords(heads)
+    }
+    private func originalRecords(_ hash: String) async throws -> (manifest: [CKRecord.ID], chunks: [CKRecord.ID]) {
+        let id = recordID("original:\(hash)")
+        guard let record = try await existingRecord(id, keys: ["manifest"]),
+              let data = record.encryptedValues["manifest"] as? Data,
+              let manifest = try? JSONDecoder().decode(OriginalManifest.self, from: data) else { return ([], []) }
+        return ([id], manifest.chunks.indices.map { recordID("chunk:\(hash):\($0)") })
+    }
+    private func deleteRecords(_ ids: [CKRecord.ID]) async throws {
+        for start in stride(from: 0, to: ids.count, by: 200) {
+            let batch = Array(ids[start..<min(start + 200, ids.count)])
+            let results = try await database.modifyRecords(saving: [], deleting: batch).deleteResults
+            for (_, result) in results {
+                if case .failure(let error) = result, (error as? CKError)?.code != .unknownItem { throw error }
+            }
+        }
     }
     func downloadOriginal(_ document: HouseholdDocument, to url: URL) async throws {
         try await verifyAccount()
