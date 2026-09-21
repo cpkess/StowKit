@@ -1,5 +1,21 @@
 # Validation
 
+## Leftover iCloud test archives identified
+
+September 21, 2026, `ArchiveMaintenance` dry run against the owner's Production iCloud. Three
+`StowKit-` zones exist. **`4017FFBA-…` is the owner's own archive**, identified from the local
+database and kept. The other two each hold one fictional document from the September
+verification runs: `462F692A-…` ("Fictional cloud verification", `fictional-transfer.pdf`,
+the successful retry) and `72CAADA2-…` (the same, from the failed first run). Only those two
+qualify for deletion.
+
+This corrects an earlier claim that all three archives in the picker were test archives. The
+picker listed the owner's archive as "iCloud Archive 4017", because it had not yet learned this
+Mac's archive ID, so choosing zones by name would have deleted the owner's iCloud copy.
+
+**Not yet done.** The delete run was blocked by this session's permission check; the owner runs
+it. The zones remain until then.
+
 ## Permanent deletion, archive picker, and iCloud-style downloads
 
 September 21, 2026, after 1.0.0. Full suite: **114 tests, zero failures** at the time of the

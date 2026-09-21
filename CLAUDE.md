@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.0.0, build 6.
+- Deployment target macOS 14.0. Current version 1.1.0, build 7.
 
 ## Architecture in one pass
 
@@ -183,9 +183,10 @@ both places. Don't "simplify" that away.
 - **Switching archives must not call `pauseCloud()`** — that turns iCloud off for the archive being left.
   Use `pauseCloudTransportForSwitch()`. The picker also hides this Mac's own iCloud zone, which would
   otherwise open as a second local copy of the same archive.
-- The owner's Production iCloud holds three fictional archives from Codex's September smoke tests
-  (listed in the picker as "iCloud Archive" plus a short ID). They are not the owner's documents;
-  deleting those zones is the owner's call.
+- **The owner's own iCloud archive is zone `StowKit-4017FFBA-…`** — never delete it. Two fictional
+  zones from Codex's September smoke tests (`462F692A-…`, `72CAADA2-…`) were confirmed by a dry run
+  of `ArchiveMaintenance` (see `docs/ICLOUD_SETUP.md`). Never pick zones by the picker's short name:
+  before the picker learns this Mac's archive ID, it lists the owner's archive among them.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 

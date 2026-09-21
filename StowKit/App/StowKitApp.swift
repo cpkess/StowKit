@@ -9,6 +9,8 @@ struct StowKitApp: App {
             Group {
 #if STOWKIT_LIVE_VERIFICATION
                 Color.clear.task { await CloudLiveVerification.run() }
+#elseif STOWKIT_ARCHIVE_MAINTENANCE
+                Color.clear.task { await ArchiveMaintenance.run() }
 #else
                 if NSClassFromString("XCTestCase") != nil { Color.clear }
                 else { LibraryView(library: library) }

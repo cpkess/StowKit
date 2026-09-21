@@ -93,3 +93,22 @@ This special build runs automatically at launch, requires the Development enviro
 For an explicit Production smoke test, use a separate signing configuration with the installed Developer ID profile, Production environment, and both `STOWKIT_LIVE_VERIFICATION STOWKIT_PRODUCTION_VERIFICATION` compilation conditions. The second flag changes the environment guard to require Production. The runner still uses only generated fictional data and retains its isolated test zone. Never distribute this build. The distribution script clears both flags.
 
 A successful run proves the tested private-cloud flow, not cross-account sharing, off-device availability, measured network-asset exclusion, or all interruption/quota cases in the acceptance checklist.
+
+## Removing leftover test archives
+
+Verification runs leave fictional archives in iCloud. `ArchiveMaintenance` (compiled only with
+`STOWKIT_ARCHIVE_MAINTENANCE`, never distributed) removes them conservatively. It reads this
+Mac's archive ID from the local database and never touches that zone. It deletes another zone
+only if every document in it is fictional test data, and it reports without deleting unless
+launched with `--delete`. Build it with a Production Developer ID xcconfig that includes
+`Config/iCloud.local.xcconfig` and sets `SWIFT_ACTIVE_COMPILATION_CONDITIONS =
+STOWKIT_ARCHIVE_MAINTENANCE`, quit StowKit, then:
+
+```sh
+open -W --stdout /tmp/maint.txt /path/to/StowKit.app            # dry run: lists what it would delete
+open -W --stdout /tmp/maint.txt /path/to/StowKit.app --args --delete
+```
+
+In delete mode it also removes the runner's `CloudValidation/` fixtures and the local caches of
+the zones it deleted. Never select zones by the picker's short name: on 2026-09-21 one of the three
+listed "iCloud Archive" entries was the owner's own archive.
