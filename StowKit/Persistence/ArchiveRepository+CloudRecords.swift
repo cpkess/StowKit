@@ -130,8 +130,11 @@ extension ArchiveRepository {
             for record in ordered {
                 if record.metadata.isTombstone { try applyIncomingTombstone(record.metadata); continue }
                 let metadata = try localizeCloudRecord(record.metadata)
-                localized.append(metadata)
                 try storeCloudState(record, key: metadata.recordKey)
+                // A record type from a newer StowKit (such as synced filing rules) is kept in
+                // CloudState for a later version to apply, instead of stalling this Mac's sync.
+                guard ["document:", "collection:"].contains(where: metadata.recordKey.hasPrefix) else { continue }
+                localized.append(metadata)
             }
             for head in page.textHeads { try queueTextDownload(head) }
             try applyIncomingPage(.init(previousToken: token, nextToken: page.token, records: localized))

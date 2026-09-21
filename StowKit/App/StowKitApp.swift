@@ -38,21 +38,26 @@ struct StowKitApp: App {
             }
         }
         Settings {
-            Form {
-                Section("Archive") {
-                    Text("Your originals are never changed. Opening one gives you a separate copy to edit.")
-                    Text("Documents in Trash can be restored and still use disk space. Text is read on this Mac, and suggestions come from Apple Intelligence when it is available, or from StowKit's built-in rules.")
-                        .foregroundStyle(.secondary)
-                    LabeledContent("Documents", value: "\(library.statistics.documents)")
-                    ArchiveUsageView(library: library)
-                    Button(library.isRebuildingIndex ? "Rebuilding Search Index…" : "Rebuild Search Index") { library.rebuildSearchIndex() }
-                        .disabled(!library.isReady || library.isRebuildingIndex)
-                    Text("Archive location").font(.caption).foregroundStyle(.secondary)
-                    Text(library.storage.root.path).font(.caption).textSelection(.enabled)
-                }
-                InboxFolderSettingsView(library: library)
-                CloudSettingsView(library: library)
-            }.formStyle(.grouped).frame(width: 600, height: 720)
+            TabView {
+                Form {
+                    Section("Archive") {
+                        Text("Your originals are never changed. Opening one gives you a separate copy to edit.")
+                        Text("Documents in Trash can be restored and still use disk space. Text is read on this Mac, and suggestions come from Apple Intelligence when it is available, or from StowKit's built-in rules.")
+                            .foregroundStyle(.secondary)
+                        LabeledContent("Documents", value: "\(library.statistics.documents)")
+                        ArchiveUsageView(library: library)
+                        Button(library.isRebuildingIndex ? "Rebuilding Search Index…" : "Rebuild Search Index") { library.rebuildSearchIndex() }
+                            .disabled(!library.isReady || library.isRebuildingIndex)
+                        Text("Archive location").font(.caption).foregroundStyle(.secondary)
+                        Text(library.storage.root.path).font(.caption).textSelection(.enabled)
+                    }
+                    InboxFolderSettingsView(library: library)
+                    CloudSettingsView(library: library)
+                }.formStyle(.grouped)
+                    .tabItem { Label("General", systemImage: "gearshape") }
+                FilingRulesView(library: library)
+                    .tabItem { Label("Rules", systemImage: "line.3.horizontal.decrease.circle") }
+            }.frame(width: 640, height: 720)
         }
     }
 }

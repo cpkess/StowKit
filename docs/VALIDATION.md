@@ -1,5 +1,31 @@
 # Validation
 
+## Filing rules (unreleased)
+
+September 21, 2026, after `08e00df`. Settings → Rules: owner-written rules in the style of
+paperless-ngx matching. A rule looks in any of title, sender, file name, or document text (first
+100,000 characters), for any of the words, all of the words (whole words), a phrase, or a regular
+expression, ignoring case and accents. Its actions are to add a collection, add tags, set the
+sender, and mark the document reviewed. Rules run inside `finishAnalysis`, after Apple
+Intelligence's merge, on unprotected fields only; a rule's collection replaces the one the model
+added, never the owner's. Apply to Existing Documents runs them over everything outside Trash,
+only ever adding collections. The inspector names the rules that applied. Rules are stored per
+Mac, as JSON in a checkpoint row, with no schema change.
+
+Sync forward compatibility: `applyCloudPage` now keeps a record of an unknown type in CloudState
+and skips it instead of throwing. Mutation-tested: with the skip removed,
+`testUnknownRecordTypeFromANewerMacDoesNotStallSync` fails with `unsupportedRecord` and the token
+does not advance, which is what a 1.2.0 Mac would do.
+
+`FilingRulesTests`, 9 tests, pass: matching per algorithm and field, disabled and empty rules,
+protected fields untouched, tags added once, a deleted collection ignored, rules filing a document
+the model was unsure about and the result syncing, apply-to-existing skipping Trash and being
+idempotent, rules surviving a reopen, and the unknown-record skip. Full suite: 139 tests, 6 failures,
+all in `ProcessingTests` (the Vision `e5rt` failures recorded below).
+
+**Not established.** Rules have not been used in the real app or on the owner's archive. They do
+not sync; each Mac has its own. Matching on OCR text inherits OCR's mistakes.
+
 ## 1.2.0 release build
 
 September 21, 2026: version 1.2.0, build 8, from `1f45b12`, built with

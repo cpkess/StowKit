@@ -21,6 +21,10 @@ struct UnderstandingInspector: View {
                 Text("\(Self.source(result.provider)) · \(Self.certainty(result.confidence))")
                     .font(.caption).foregroundStyle(.secondary)
                 if !result.note.isEmpty { Text(result.note).font(.caption).foregroundStyle(.secondary) }
+                if let rules = result.rules, !rules.isEmpty {
+                    Label("Filed by \(rules.count == 1 ? "rule" : "rules") \(rules.map { "“\($0)”" }.joined(separator: ", "))", systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             if let error = snapshot?.error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }.sheet(isPresented: $showSuggestions) {

@@ -109,7 +109,10 @@ extension ArchiveRepository {
     }
     func finishAnalysis(_ id: UUID, revision: Int, result: DocumentUnderstanding) throws {
         guard let job = try analysis(id), job.revision == revision, job.state == "analyzing", var document = try document(id), document.trashedAt == nil else { return }
-        document = UnderstandingPolicy.merge(result, into: document, protected: Set(job.protectedFields))
+        let before = document, protected = Set(job.protectedFields)
+        document = UnderstandingPolicy.merge(result, into: document, protected: protected)
+        var result = result
+        (document, result.rules) = try applyFilingRules(to: document, before: before, protected: protected)
         document.modifiedAt = Date()
         let descriptor = FetchDescriptor<Record>(predicate: #Predicate { $0.id == id })
         guard let record = try context.fetch(descriptor).first else { throw ArchiveError.missingRecord }

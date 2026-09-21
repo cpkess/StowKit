@@ -79,6 +79,8 @@ final class LibraryStore {
     @ObservationIgnored private var inboxFolder: InboxFolder?
     private(set) var inboxFolderURL: URL?
     private(set) var inboxFolderStatus = ""
+    private(set) var filingRules: [FilingRule] = []
+    private(set) var rulesMessage = ""
 
     init(root: URL = DocumentStorageManager.defaultRoot, processingEnabled: Bool = true) {
         self.processingEnabled = processingEnabled
@@ -187,6 +189,30 @@ final class LibraryStore {
         } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
     }
 
+    // MARK: Filing rules
+
+    func saveRule(_ rule: FilingRule) {
+        var rules = filingRules
+        if let index = rules.firstIndex(where: { $0.id == rule.id }) { rules[index] = rule } else { rules.append(rule) }
+        storeRules(rules)
+    }
+    func deleteRule(_ id: UUID) { storeRules(filingRules.filter { $0.id != id }) }
+    func moveRules(from source: IndexSet, to destination: Int) {
+        var rules = filingRules; rules.move(fromOffsets: source, toOffset: destination); storeRules(rules)
+    }
+    private func storeRules(_ rules: [FilingRule]) {
+        do { try repository?.saveFilingRules(rules); filingRules = rules; rulesMessage = "" }
+        catch { errorMessage = "Your rules could not be saved.\n\n\(error.localizedDescription)" }
+    }
+    func applyRulesToAll() {
+        guard allowCloudEdit(), let repository else { return }
+        do {
+            let changed = try repository.applyFilingRulesToAll()
+            rulesMessage = changed == 0 ? "No documents needed changes." : "Rules changed \(changed) \(changed == 1 ? "document" : "documents")."
+            refreshTextSearch(resetLimit: false); refreshProcessingOverview(); syncNow()
+        } catch { errorMessage = "Rules could not be applied.\n\n\(error.localizedDescription)" }
+    }
+
     // MARK: Inbox folder
 
     func chooseInboxFolder() {
@@ -280,6 +306,7 @@ final class LibraryStore {
             if isThisMacArchive { UserDefaults.standard.set(repository.archiveID.uuidString, forKey: Self.thisMacArchiveKey) }
             await purgeDeletedFiles()
             collections = try repository.collections()
+            filingRules = (try? repository.filingRules()) ?? []
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
             do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }

@@ -17,6 +17,8 @@ struct DocumentUnderstanding: Codable, Sendable, Equatable {
     var confidence = 0.0
     var provider = "Local rules"
     var note = ""
+    /// Names of the filing rules that also applied. Optional so results saved before rules decode.
+    var rules: [String]?
 }
 protocol DocumentIntelligenceProvider: Sendable {
     func understand(_ input: UnderstandingInput) async throws -> DocumentUnderstanding
