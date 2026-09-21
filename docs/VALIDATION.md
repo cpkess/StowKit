@@ -1,5 +1,34 @@
 # Validation
 
+## Vision cold-start cost measured
+
+September 20, 2026: the first `VNRecognizeTextRequest` in a process costs **46.5 s**;
+subsequent requests in that process cost **0.08 s**. Measured with a 90 KB standalone Swift
+tool containing no StowKit code, so this is a property of Vision on this machine, not of the
+app. macOS 27.0 (26A428), Apple M2 Max.
+
+```text
+iteration 1: 46.494 s   iteration 2: 0.081 s   iteration 3: 0.085 s   iteration 4: 0.088 s
+```
+
+The warm state is **shared between processes and expires**. A second process started
+immediately after paid only 0.173 s, and a third 0.178 s; but a fresh process roughly twenty
+minutes later paid the full 46.3 s again. The cost therefore recurs after idle rather than
+being a one-time, first-launch charge. The `e5rt` fallback messages recorded below appear on
+every cold run and remain non-fatal — recognized text is correct in all cases.
+
+Consequence for the UI: text extraction already shows a spinner, a `· 1 of N` label, and a
+determinate bar, so the window is **not** a frozen-looking app — but the first page can sit
+at `1 of N` for roughly a minute with no stated reason. `ProcessingInspector` now adds a
+caption after six seconds on an uncompleted first page. The extraction pipeline is unchanged;
+the delay is Apple's and is not worked around.
+
+**Not established.** The exact idle threshold at which the warm state is discarded (observed
+lost somewhere between 2 and 20 minutes), whether it is tied to memory pressure, and whether
+other Macs or macOS versions behave the same. The caption's six-second threshold is a
+judgement call, not a measured optimum, and it was not verified on screen — triggering it
+requires an import into a real archive.
+
 ## macOS 27 OCR regression — not reproducible in the shipping build
 
 September 20, 2026 (later run, Claude Code): the OCR failure recorded under "Latest regression

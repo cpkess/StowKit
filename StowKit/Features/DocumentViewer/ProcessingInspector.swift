@@ -34,6 +34,16 @@ struct ProcessingInspector: View {
                 if snapshot.state.isActive && snapshot.pageCount > 0 {
                     ProgressView(value: Double(snapshot.completedPages), total: Double(snapshot.pageCount))
                 }
+                if snapshot.state == .extractingText && snapshot.completedPages == 0 {
+                    // Vision loads its recognition models on the first request after the Mac has
+                    // been idle, which measured ~46s; without a note the first page looks stuck.
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        if context.date.timeIntervalSince(snapshot.updatedAt) > 6 {
+                            Text("Still working on the first page. Apple's text recognition can take up to a minute to start after your Mac has been idle; later pages are much faster.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if let error = snapshot.error {
                     Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     if snapshot.completedPages > 0 {

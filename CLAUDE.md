@@ -148,8 +148,12 @@ both places. Don't "simplify" that away.
   "app's generated cache" diagnosis was wrong. Why the original run failed is still unknown,
   so if it recurs, capture the full `e5rt`/`e5rtError` output and build configuration *before*
   rebuilding. Don't add a speculative workaround; one was already tried and reverted.
-- **First Vision call costs ~46s cold, ~0.5s warm.** A user's first scanned import can look
-  like a hang for about a minute. Unaddressed; a progress affordance would be the honest fix.
+- **First Vision call costs ~46s cold, ~0.08s warm**, measured in a standalone tool with no
+  StowKit code — it is Apple's cost, not ours. The warm state is shared across processes but
+  expires after idle, so this *recurs*; it is not a one-time first-launch charge. Extraction
+  already shows a spinner and `· 1 of N`, so nothing looks frozen; `ProcessingInspector` adds
+  a caption after six seconds explaining the wait. Don't try to work around the delay itself,
+  and don't pre-warm Vision at launch — that spends CPU for every user who never imports a scan.
 - Schema V7→V8 exists only because macOS 27 exposed an inherited-property collision on a
   reserved `hash` property (renamed to `sourceHash`). Both V7 and V8 stay in the migration
   plan because a dev build already opened V7. Don't prune migration versions.
