@@ -27,6 +27,22 @@ Use a separate macOS test user containing only generated fictional documents for
 
 The override is applied by the command above; copying the file alone does not configure Xcode's Run action. To use Run with cloud signing, assign the local configuration file to the app configuration in Xcode and confirm the resolved signing settings. Keep personal team settings out of the shared project.
 
+### Running the tests against a provisioned build
+
+`iCloud.local.xcconfig` sets `CODE_SIGN_ENTITLEMENTS` and `INFOPLIST_FILE` for every target, so
+the hosted test bundle also requests iCloud entitlements. `com.stowkit.tests` is not registered
+for the container, and profile creation fails before anything compiles. Use
+`Config/iCloud.tests.xcconfig`, which scopes both settings to the app target:
+
+```sh
+xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug \
+  -destination 'platform=macOS' -derivedDataPath /tmp/StowKitProvisionedTest \
+  -xcconfig Config/iCloud.tests.xcconfig -allowProvisioningUpdates test
+```
+
+The test host is then signed with real Development iCloud entitlements and the App Sandbox,
+which is the configuration ordinary Debug runs do not cover. Everyday testing does not need it.
+
 ## Development schema
 
 The explicit transport uses these record types in a custom `StowKit-<archive UUID>` zone:

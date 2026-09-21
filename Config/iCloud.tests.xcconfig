@@ -1,0 +1,26 @@
+// Run the hosted XCTest bundle against a provisioned, entitled, sandboxed StowKit.app.
+//
+// iCloud.local.xcconfig sets CODE_SIGN_ENTITLEMENTS and INFOPLIST_FILE for every target in
+// the project, including StowKitTests. Profile creation then fails, because com.stowkit.tests
+// is not registered for the iCloud container:
+//
+//   error: Entitlements com.apple.developer.icloud-container-environment, ... not found and
+//   could not be included in profile. (in target 'StowKitTests')
+//
+// Indirecting through $(TARGET_NAME) applies both settings to the app target only and leaves
+// the test bundle with plain development signing and its generated Info.plist.
+//
+//   xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug \
+//     -destination 'platform=macOS' -derivedDataPath /tmp/StowKitProvisionedTest \
+//     -xcconfig Config/iCloud.tests.xcconfig -allowProvisioningUpdates test
+//
+// Requires Config/iCloud.local.xcconfig (gitignored; copy from iCloud.xcconfig.example).
+#include "iCloud.local.xcconfig"
+
+STOWKIT_ENTITLEMENTS_StowKit = Config/StowKitCloud.entitlements
+STOWKIT_ENTITLEMENTS_StowKitTests =
+CODE_SIGN_ENTITLEMENTS = $(STOWKIT_ENTITLEMENTS_$(TARGET_NAME))
+
+STOWKIT_PLIST_StowKit = Config/StowKitCloud-Info.plist
+STOWKIT_PLIST_StowKitTests =
+INFOPLIST_FILE = $(STOWKIT_PLIST_$(TARGET_NAME))

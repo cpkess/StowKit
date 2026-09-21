@@ -139,15 +139,15 @@ both places. Don't "simplify" that away.
 
 ## Known issues / traps
 
-- **The macOS 27 OCR failure does not reproduce in the default build** (re-tested 2026-09-20:
-  95 tests, 0 failures). The `e5rt` log lines name *system* model bundles under
+- **The macOS 27 OCR failure does not reproduce** — re-tested 2026-09-20 in both the default
+  build (95 tests, 0 failures) and the provisioned, entitled, sandboxed build (13 processing
+  tests, 0 failures). The `e5rt` log lines name *system* model bundles under
   `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, which hold flat
   CoreML content instead of the per-hardware sub-bundles the E5 runtime wants; Vision falls
   back and still returns correct text. There is no StowKit-generated E5 cache — the earlier
-  "app's generated cache" diagnosis was wrong. Still unverified: the failure originally
-  appeared on a *provisioned* build, which can't be re-tested until Xcode's Apple account is
-  re-authenticated and `com.stowkit.tests` has a profile. Don't add a speculative workaround;
-  one was already tried and reverted.
+  "app's generated cache" diagnosis was wrong. Why the original run failed is still unknown,
+  so if it recurs, capture the full `e5rt`/`e5rtError` output and build configuration *before*
+  rebuilding. Don't add a speculative workaround; one was already tried and reverted.
 - **First Vision call costs ~46s cold, ~0.5s warm.** A user's first scanned import can look
   like a hang for about a minute. Unaddressed; a progress affordance would be the honest fix.
 - Schema V7→V8 exists only because macOS 27 exposed an inherited-property collision on a
@@ -166,14 +166,12 @@ both places. Don't "simplify" that away.
 
 1. **Household sharing acceptance** — two iCloud accounts, two Macs, against the checklist in
    `docs/ICLOUD_SETUP.md`. This is the blocking gate for calling iCloud ready.
-2. **OCR on a provisioned build** — the only remaining unknown after the 2026-09-20 re-test.
-   Needs a re-authenticated Xcode account and a profile for `com.stowkit.tests`.
-3. **Optimized storage** (brief §21) — cloud-only/optimized/offline states, pins, conservative
+2. **Optimized storage** (brief §21) — cloud-only/optimized/offline states, pins, conservative
    eviction, disk budget settings. Nothing is evicted today.
-4. Cloud thumbnails; extractor-version negotiation.
-5. Push subscriptions / background sync (foreground-only today).
-6. Permanent deletion + real deletion reconciliation.
-7. Not yet started from the brief: entities, related documents, reminders, semantic search,
+3. Cloud thumbnails; extractor-version negotiation.
+4. Push subscriptions / background sync (foreground-only today).
+5. Permanent deletion + real deletion reconciliation.
+6. Not yet started from the brief: entities, related documents, reminders, semantic search,
    Spotlight, App Intents, Share Extension, iOS companion.
 
 ## Working with the owner

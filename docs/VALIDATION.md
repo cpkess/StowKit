@@ -28,12 +28,25 @@ Cold-start cost is real and worth knowing: the first Vision call in a fresh proc
 **46.2 seconds**; the same test warm took **0.5 seconds**. A user's first scanned import can
 therefore appear to hang for roughly a minute.
 
-**Not established.** The original failure occurred on a *provisioned* build, and that
-configuration could not be re-tested: `xcodebuild` with `Config/iCloud.local.xcconfig` fails
-before compiling with "Unable to log in with account" and no Mac App Development profile for
-`com.stowkit.tests`. Whether signing, entitlements, or the sandbox container changes Vision's
-behavior remains **unverified** and needs a re-authenticated Xcode account plus a profile for
-the test target. No OCR code was changed; no speculative workaround was added.
+**The provisioned configuration was then tested and also passes.** After the Apple account was
+re-authenticated, `ProcessingTests` ran **13 tests with zero failures** against a test host
+signed with the real Development iCloud entitlements (`iCloud.com.stowkit.app`), hardened by the
+App Sandbox, and verified with `codesign -d --entitlements`. `testVisionReadsImageAndScannedPDF`
+passed in 0.528 s; the cold ~25 s Vision warm-up simply landed on whichever test ran first. The
+same `e5rt` messages appear and remain non-fatal. Signing, entitlements, and the sandbox
+container therefore do **not** reproduce the failure, and no OCR code was changed.
+
+Running the hosted tests in that configuration needs `Config/iCloud.tests.xcconfig`.
+`iCloud.local.xcconfig` applies `CODE_SIGN_ENTITLEMENTS` and `INFOPLIST_FILE` to every target,
+so `StowKitTests` requests iCloud entitlements that `com.stowkit.tests` is not registered for
+and profile creation fails before compiling. The tests config scopes both settings to the app
+target through `$(TARGET_NAME)`.
+
+**Still not established.** Why the September 20 post-provisioning run failed. Both plausible
+remaining explanations — a transient Vision/ANE state that has since cleared, or an
+interaction with that specific run's environment — are unproven, and the original failing
+state no longer exists to inspect. If OCR fails again, capture the full `e5rt`/`e5rtError`
+output and the exact build configuration before rebuilding anything.
 
 ## Developer ID and Production CloudKit verification
 
