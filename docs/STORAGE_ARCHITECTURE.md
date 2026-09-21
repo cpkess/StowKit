@@ -139,6 +139,10 @@ cache browser, no per-collection rules.
    appears, still searches, still shows its thumbnail; explicit download returns
    byte-identical bytes; a pinned document is never evictable; eviction is refused when
    unverified, when sync is off, when processing is outstanding, and when no thumbnail exists.
+   *Implemented 2026-09-20* as `DocumentStorageManager.evictOriginal`, the single decision
+   point, with `EvictionFacts` gathered by `ArchiveRepository.evictionFacts` and typed
+   `EvictionRefusal` cases. Covered against the fake transport only; nothing has been evicted
+   in the running app or against live CloudKit. See [validation](VALIDATION.md).
 3. **V9 `lastAccessedAt` and automatic policy.** Only after 1 and 2 hold.
 
 Acceptance, on top of the iCloud checklist's storage items — full-text search with zero

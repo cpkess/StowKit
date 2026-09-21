@@ -53,6 +53,8 @@ final class LibraryStore {
     private(set) var usage: ArchiveUsage?
     private(set) var isMeasuringUsage = false
     private(set) var usageError: String?
+    private(set) var storageState: DocumentStorageState?
+    private(set) var storageError: String?
     private(set) var pendingProcessingCount = 0
     private(set) var isLoadingMore = false
     private(set) var isRebuildingIndex = false
@@ -251,6 +253,34 @@ final class LibraryStore {
         guard var document = (try? repository?.document(id)) else { return }
         document.favorite.toggle()
         update(document)
+    }
+    func setPinned(_ id: UUID, _ pinned: Bool) {
+        guard let repository else { return }
+        do { try repository.setOriginalPinned(id, pinned); refreshStorageState(id) }
+        catch { errorMessage = "Your change could not be saved.\n\n\(error.localizedDescription)" }
+    }
+    /// Removes this Mac's copy of an already-verified original. The document, its text, and its
+    /// thumbnail stay; the bytes download again on request.
+    func removeDownload(_ id: UUID) {
+        guard let repository, let document = try? repository.document(id) else { return }
+        storageError = nil
+        Task {
+            do {
+                let facts = try repository.evictionFacts(id)
+                try await storage.evictOriginal(document, facts: facts)
+                refreshStorageState(id)
+                if usage != nil { refreshUsage() }
+            } catch { storageError = error.localizedDescription }
+        }
+    }
+    func refreshStorageState(_ id: UUID) {
+        guard let repository, let document = try? repository.document(id) else { return }
+        Task {
+            let location = await storage.originalLocation(for: document)
+            let facts = try? repository.evictionFacts(id)
+            storageState = DocumentStorageState(documentID: id, location: location,
+                                                pinned: facts?.pinned ?? false)
+        }
     }
     func moveToTrash(_ id: UUID) {
         guard var document = (try? repository?.document(id)) else { return }

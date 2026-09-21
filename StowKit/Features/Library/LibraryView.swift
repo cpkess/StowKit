@@ -147,8 +147,13 @@ struct LibraryView: View {
                     trashOrRestore: { document.trashedAt == nil ? library.moveToTrash(document.id) : library.restore(document.id) },
                     processing: library.processing[document.id], textService: library.textSearchService,
                     retryProcessing: { library.retryProcessing(document.id, restart: $0) },
-                    analysis: library.analysis[document.id], retryAnalysis: { library.retryAnalysis(document.id) }, applyAnalysis: { library.applyAnalysis(document.id) })
+                    analysis: library.analysis[document.id], retryAnalysis: { library.retryAnalysis(document.id) }, applyAnalysis: { library.applyAnalysis(document.id) },
+                    storageState: library.storageState?.documentID == document.id ? library.storageState : nil,
+                    storageError: library.storageError,
+                    setPinned: { library.setPinned(document.id, $0) },
+                    removeDownload: { library.removeDownload(document.id) })
                     .id(document.id)
+                    .task(id: document.id) { library.refreshStorageState(document.id) }
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
             }

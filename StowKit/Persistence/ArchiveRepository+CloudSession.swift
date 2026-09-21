@@ -20,6 +20,31 @@ extension ArchiveRepository {
     func originalCloudState(_ id: UUID) throws -> ArchiveSchemaV7.OriginalState? {
         try context.fetch(FetchDescriptor<ArchiveSchemaV7.OriginalState>(predicate: #Predicate { $0.documentID == id })).first
     }
+    /// `OriginalState.pinned` has existed since V7 unused; wiring it needs no migration.
+    func setOriginalPinned(_ id: UUID, _ pinned: Bool) throws {
+        if let row = try originalCloudState(id) { row.pinned = pinned }
+        else {
+            let row = ArchiveSchemaV7.OriginalState(documentID: id, remote: false)
+            row.pinned = pinned
+            context.insert(row)
+        }
+        try save()
+    }
+    /// Collect every repository-owned fact eviction depends on. Deciding happens in
+    /// `DocumentStorageManager.evictOriginal`, never here and never at a call site.
+    func evictionFacts(_ id: UUID) throws -> EvictionFacts {
+        var facts = EvictionFacts()
+        let state = try originalCloudState(id)
+        facts.pinned = state?.pinned ?? false
+        facts.cloudVerified = state?.cloudVerified ?? false
+        facts.remote = state?.remote ?? false
+        // Anything short of a finished extraction may still need to read the original.
+        let job = try processingJob(id)?.snapshot.state
+        facts.processingOutstanding = !(job == .complete)
+        if let binding = try cloudBinding(), binding.1 { facts.sharedArchive = binding.0.shared }
+        else { facts.sharedArchive = true }
+        return facts
+    }
     func markOriginalVerified(_ id: UUID) throws {
         if let row = try originalCloudState(id) { row.cloudVerified = true }
         else { let row = ArchiveSchemaV7.OriginalState(documentID: id, remote: false); row.cloudVerified = true; context.insert(row) }

@@ -1,5 +1,41 @@
 # Validation
 
+## Optimized storage, step 2: pins and manual eviction
+
+September 20, 2026: `DocumentStorageManager.evictOriginal` is the only place StowKit removes a
+local original, and it checks every invariant from
+[the storage architecture](STORAGE_ARCHITECTURE.md) itself rather than trusting a call site.
+Each refusal is a distinct `EvictionRefusal` case, so tests assert *why* an eviction was
+refused, not merely that it failed. `OriginalState.pinned` is now wired, which needed no
+migration. Eviction is manual only; nothing evicts on its own.
+
+Four tests in `CloudArchiveTests` against the fake transport; full suite **101 tests, zero
+failures**.
+
+- `testEvictionRemovesTheLocalCopyAndTheOriginalComesBackByteIdentical`: the file goes, the
+  derived state (`relativePath`, thumbnail, saved text, completed job) stays, the location
+  flips to `.optimized`, and `localOriginal` downloads the bytes back **byte-identical** with
+  exactly one transport download.
+- `testEvictionRefusesPinnedUnverifiedAndUnfinishedDocuments`: refuses `.pinned`; refuses
+  `.noVerifiedCloudCopy` when neither uploaded-and-verified nor downloaded; **accepts** a
+  `remote` document, which is the case a naive `cloudVerified`-only rule would have broken;
+  refuses `.processingOutstanding` on a separate archive so the refusal cannot come from an
+  already-missing file.
+- `testEvictionRefusesWithoutSyncAThumbnailOrALocalFile`: refuses `.syncUnavailable`,
+  `.sharedArchive`, `.noThumbnail`, and `.notDownloaded` on a second eviction.
+- `testEvictionFrontsReclaimedBytesInMeasuredUsage`: measured usage drops by exactly the
+  reported reclaimed bytes and one original file, while derived bytes remain.
+
+The suite was checked for vacuous passes by deleting the `pinned` guard and re-running: two
+assertions failed. The guard was restored and the suite re-run.
+
+**Not established.** No eviction has been performed in the running app or against live
+CloudKit — every result above uses `FakeArchiveCloud`. The inspector's controls have not been
+seen on screen. Eviction while a download is genuinely in flight is enforced by a
+`downloads[id]` check but is not covered by a test, because the fake transport completes
+synchronously. Interrupted-transfer and disk-full recovery from the design note's acceptance
+list remain untested.
+
 ## Optimized storage, step 1: disk accounting
 
 September 20, 2026: `DocumentStorageManager.usage()` walks the archive and reports allocated

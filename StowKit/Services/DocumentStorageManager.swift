@@ -100,6 +100,35 @@ actor DocumentStorageManager {
         guard try hash(file) == document.contentHash else { throw CloudArchiveError.corruptAsset }
         try? files.removeItem(at: directory)
     }
+    func originalLocation(for document: HouseholdDocument) -> OriginalLocation {
+        if files.fileExists(atPath: (try? originalURL(for: document.relativePath))?.path ?? "") { return .availableOffline }
+        return files.fileExists(atPath: thumbnailURL(for: document.id).path) ? .optimized : .cloudOnly
+    }
+
+    /// The only place a local original is ever removed. Every safety invariant from
+    /// `docs/STORAGE_ARCHITECTURE.md` is checked here rather than at a call site, and every
+    /// refusal is typed so tests can assert the reason and not merely that it failed.
+    ///
+    /// This removes a redundant local copy of immutable, independently verified bytes. It is a
+    /// cache operation: `relativePath` is untouched and `localOriginal` fetches the bytes back.
+    @discardableResult
+    func evictOriginal(_ document: HouseholdDocument, facts: EvictionFacts) throws -> Int64 {
+        guard cloud != nil else { throw EvictionRefusal.syncUnavailable }
+        guard !facts.sharedArchive else { throw EvictionRefusal.sharedArchive }
+        guard !facts.pinned else { throw EvictionRefusal.pinned }
+        guard facts.hasVerifiedCloudCopy else { throw EvictionRefusal.noVerifiedCloudCopy }
+        guard !facts.processingOutstanding else { throw EvictionRefusal.processingOutstanding }
+        guard downloads[document.id] == nil else { throw EvictionRefusal.transferInProgress }
+        let original = try originalURL(for: document.relativePath)
+        guard files.fileExists(atPath: original.path) else { throw EvictionRefusal.notDownloaded }
+        // Without a cached thumbnail the document cannot be drawn again until cloud thumbnails
+        // exist, so refuse rather than leave a blank row behind.
+        guard files.fileExists(atPath: thumbnailURL(for: document.id).path) else { throw EvictionRefusal.noThumbnail }
+        let reclaimed = Int64((try? original.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
+        try files.removeItem(at: original)
+        return reclaimed
+    }
+
     /// Walk the archive and report allocated bytes per category. Deliberately measures the disk
     /// rather than summing recorded document sizes, which count documents that are trashed or
     /// have never been downloaded. Callers treat this as a report, not as a cached value.

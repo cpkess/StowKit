@@ -15,6 +15,10 @@ struct DocumentDetailView: View {
     let analysis: AnalysisSnapshot?
     let retryAnalysis: () -> Void
     let applyAnalysis: () -> Void
+    let storageState: DocumentStorageState?
+    let storageError: String?
+    let setPinned: (Bool) -> Void
+    let removeDownload: () -> Void
     @State private var showDetails = true
     @State private var quickLookURL: URL?
     @State private var originalError: String?
@@ -45,6 +49,9 @@ struct DocumentDetailView: View {
                             ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
                                 isTrashed: document.trashedAt != nil, retry: retryProcessing)
                             UnderstandingInspector(snapshot: analysis, isTrashed: document.trashedAt != nil, retry: retryAnalysis, apply: applyAnalysis)
+                            StorageInspector(state: storageState, error: storageError,
+                                isTrashed: document.trashedAt != nil,
+                                setPinned: setPinned, removeDownload: removeDownload)
                             Divider()
                             if document.trashedAt != nil {
                                 HStack {

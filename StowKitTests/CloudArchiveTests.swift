@@ -214,6 +214,126 @@ import SQLite3
         XCTAssertThrowsError(try repository.bindCloud(other))
         XCTAssertEqual(try repository.cloudBinding()?.0, binding)
     }
+    /// Build an archive whose single document satisfies every eviction invariant, so each test
+    /// below can break exactly one and assert the specific refusal.
+    private func evictable(_ name: String = "A", shared: Bool = false)
+        async throws -> (ArchiveRepository, DocumentStorageManager, HouseholdDocument, FakeArchiveCloud) {
+        let repository = try archive(name)
+        let document = try seed(repository, name: name, text: "Fictional evictable water bill")
+        let server = FakeArchiveCloud()
+        let storage = DocumentStorageManager(root: root.appendingPathComponent(name))
+        await storage.setCloudTransport(server)
+        try repository.bindCloud(CloudArchiveBinding(containerID: "iCloud.test", environment: "Development",
+            accountID: "account", archiveID: repository.archiveID, zoneName: "zone",
+            ownerName: "owner", shared: shared))
+        try repository.markOriginalVerified(document.id)
+        let original = try storage.originalURL(for: document.relativePath)
+        try await server.uploadOriginal(document, url: original)
+        let thumbnail = storage.thumbnailURL(for: document.id)
+        try FileManager.default.createDirectory(at: thumbnail.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("fictional thumbnail".utf8).write(to: thumbnail)
+        return (repository, storage, document, server)
+    }
+    private func assertRefusal(_ expected: EvictionRefusal?, _ body: () async throws -> Void,
+                               file: StaticString = #filePath, line: UInt = #line) async {
+        do {
+            try await body()
+            XCTAssertNil(expected, "expected refusal \(String(describing: expected))", file: file, line: line)
+        } catch {
+            XCTAssertEqual(error as? EvictionRefusal, expected, file: file, line: line)
+        }
+    }
+
+    func testEvictionRemovesTheLocalCopyAndTheOriginalComesBackByteIdentical() async throws {
+        let (repository, storage, document, server) = try await evictable()
+        let original = try storage.originalURL(for: document.relativePath)
+        let before = try Data(contentsOf: original)
+
+        let startingLocation = await storage.originalLocation(for: document)
+        XCTAssertEqual(startingLocation, .availableOffline)
+        let reclaimed = try await storage.evictOriginal(document, facts: repository.evictionFacts(document.id))
+        XCTAssertGreaterThan(reclaimed, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.path))
+        let evictedLocation = await storage.originalLocation(for: document)
+        XCTAssertEqual(evictedLocation, .optimized)
+
+        // Everything that makes the document usable without its original survives.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: storage.thumbnailURL(for: document.id).path))
+        XCTAssertGreaterThan(try XCTUnwrap(repository.processingJob(document.id)?.snapshot.characterCount), 0)
+        XCTAssertEqual(try repository.document(document.id)?.relativePath, document.relativePath)
+        XCTAssertEqual(try repository.processingJob(document.id)?.snapshot.state, .complete)
+
+        let restored = try await storage.localOriginal(for: document)
+        XCTAssertEqual(try Data(contentsOf: restored), before)
+        let downloads = await server.originalDownloads
+        XCTAssertEqual(downloads, 1)
+        let restoredLocation = await storage.originalLocation(for: document)
+        XCTAssertEqual(restoredLocation, .availableOffline)
+    }
+
+    func testEvictionRefusesPinnedUnverifiedAndUnfinishedDocuments() async throws {
+        let (repository, storage, document, _) = try await evictable()
+
+        try repository.setOriginalPinned(document.id, true)
+        var facts = try repository.evictionFacts(document.id)
+        XCTAssertTrue(facts.pinned)
+        await assertRefusal(.pinned) { try await storage.evictOriginal(document, facts: facts) }
+        try repository.setOriginalPinned(document.id, false)
+
+        // Neither uploaded-and-verified nor downloaded: this Mac may hold the only copy.
+        facts = try repository.evictionFacts(document.id)
+        facts.cloudVerified = false; facts.remote = false
+        XCTAssertFalse(facts.hasVerifiedCloudCopy)
+        await assertRefusal(.noVerifiedCloudCopy) { try await storage.evictOriginal(document, facts: facts) }
+
+        // A download counts on its own: promoting one already validated the bytes.
+        facts.remote = true
+        XCTAssertTrue(facts.hasVerifiedCloudCopy)
+        await assertRefusal(nil) { try await storage.evictOriginal(document, facts: facts) }
+
+        // A fresh archive: the case above evicted this one's original, and a later refusal must
+        // come from the invariant under test rather than from the missing file.
+        let (pendingRepo, pendingStorage, pendingDoc, _) = try await evictable("Unfinished")
+        var pending = try pendingRepo.evictionFacts(pendingDoc.id)
+        XCTAssertFalse(pending.processingOutstanding, "the fixture completes extraction")
+        pending.processingOutstanding = true
+        await assertRefusal(.processingOutstanding) { try await pendingStorage.evictOriginal(pendingDoc, facts: pending) }
+    }
+
+    func testEvictionRefusesWithoutSyncAThumbnailOrALocalFile() async throws {
+        let (repository, storage, document, _) = try await evictable()
+        let facts = try repository.evictionFacts(document.id)
+
+        await storage.setCloudTransport(nil)
+        await assertRefusal(.syncUnavailable) { try await storage.evictOriginal(document, facts: facts) }
+
+        let (sharedRepo, sharedStorage, sharedDoc, _) = try await evictable("Shared", shared: true)
+        let sharedFacts = try sharedRepo.evictionFacts(sharedDoc.id)
+        XCTAssertTrue(sharedFacts.sharedArchive)
+        await assertRefusal(.sharedArchive) { try await sharedStorage.evictOriginal(sharedDoc, facts: sharedFacts) }
+
+        let (thumbRepo, thumbStorage, thumbDoc, _) = try await evictable("NoThumb")
+        try FileManager.default.removeItem(at: thumbStorage.thumbnailURL(for: thumbDoc.id))
+        let thumbFacts = try thumbRepo.evictionFacts(thumbDoc.id)
+        await assertRefusal(.noThumbnail) { try await thumbStorage.evictOriginal(thumbDoc, facts: thumbFacts) }
+
+        // Evicting twice is refused rather than silently succeeding.
+        let (againRepo, againStorage, againDoc, _) = try await evictable("Again")
+        let againFacts = try againRepo.evictionFacts(againDoc.id)
+        try await againStorage.evictOriginal(againDoc, facts: againFacts)
+        await assertRefusal(.notDownloaded) { try await againStorage.evictOriginal(againDoc, facts: againFacts) }
+    }
+
+    func testEvictionFrontsReclaimedBytesInMeasuredUsage() async throws {
+        let (repository, storage, document, _) = try await evictable()
+        let before = try await storage.usage()
+        let reclaimed = try await storage.evictOriginal(document, facts: repository.evictionFacts(document.id))
+        let after = try await storage.usage()
+        XCTAssertEqual(after.originalFiles, before.originalFiles - 1)
+        XCTAssertEqual(after.originals, before.originals - reclaimed)
+        XCTAssertGreaterThan(after.derived, 0, "text, thumbnail, and database remain")
+    }
+
     func testBadRemoteIdentityRollsBackNewDocumentAndToken() throws {
         let a = try archive("A"), doc = try seed(a, name: "A"), b = try archive("B", joining: a.archiveID)
         let operation = try XCTUnwrap(a.pendingSyncOperations().first)
