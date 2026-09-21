@@ -36,8 +36,8 @@ struct StowKitApp: App {
         Settings {
             Form {
                 Section("Local Archive") {
-                    Text("Documents and metadata are stored on this Mac. Originals are preserved unchanged; opening a document creates a separate working copy.")
-                    Text("Trash is recoverable and continues to use disk space. Text extraction uses local PDF text and Vision OCR. Document understanding uses Apple’s on-device model when available, with local rules as a fallback. iCloud is optional and configured below.")
+                    Text("Your documents are stored on this Mac and are never changed. Opening one gives you a separate copy to edit.")
+                    Text("Documents in Trash can be restored and still use disk space. Text is read on this Mac, and suggestions come from Apple Intelligence when it is available, or from StowKit's built-in rules. iCloud is optional.")
                         .foregroundStyle(.secondary)
                     LabeledContent("Documents", value: "\(library.statistics.documents)")
                     ArchiveUsageView(library: library)

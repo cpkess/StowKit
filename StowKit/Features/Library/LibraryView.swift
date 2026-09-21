@@ -81,7 +81,7 @@ struct LibraryView: View {
                     ContentUnavailableView {
                         Label(library.search.isEmpty ? "No Documents" : "No Results", systemImage: library.search.isEmpty ? "tray" : "magnifyingglass")
                     } description: {
-                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, correspondent, tag, or words inside a document.")
+                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents moved to Trash stay here until you restore them." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, sender, tag, or words inside a document.")
                     } actions: {
                         if library.search.isEmpty && library.destination != .trash {
                             Button("Import Documents") { showImporter = true }
@@ -115,7 +115,7 @@ struct LibraryView: View {
                 if library.pendingProcessingCount > 0 {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text(library.activeProcessing?.progressLabel ?? "Waiting to extract text").lineLimit(1)
+                        Text(library.activeProcessing?.progressLabel ?? "Waiting to read text").lineLimit(1)
                         Spacer()
                         Text("\(library.pendingProcessingCount) remaining")
                     }.font(.caption).foregroundStyle(.secondary).padding(10)
@@ -275,7 +275,9 @@ private struct DocumentRow: View {
                     Text(document.title).font(.headline).lineLimit(2)
                     if document.favorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow).accessibilityLabel("Favorite") }
                 }
-                Text(document.correspondent.isEmpty ? "No correspondent" : document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                if !document.correspondent.isEmpty {
+                    Text(document.correspondent).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if !snippet.isEmpty {
                     highlightedSnippet.font(.caption).foregroundStyle(.secondary).lineLimit(3)
                 }
@@ -285,14 +287,14 @@ private struct DocumentRow: View {
                     if processing?.state == .failed {
                         Label("Text unavailable", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
                     } else if processing?.state.isActive == true {
-                        Text("Extracting text")
+                        Text("Reading text")
                     } else if processing?.state == .queued {
-                        Text("Queued")
+                        Text("Waiting")
                     } else if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
-                        Text("Review")
+                        Text("Needs review")
                     } else if analysis?.reviewProtected == false, let confidence = analysis?.result?.confidence, confidence >= 0.65 && confidence < 0.90 {
-                        Text("Suggested filing").foregroundStyle(.orange)
+                        Text("Filed automatically").foregroundStyle(.secondary)
                     } else { Text(document.formatLabel) }
                 }.font(.caption).foregroundStyle(.secondary)
             }

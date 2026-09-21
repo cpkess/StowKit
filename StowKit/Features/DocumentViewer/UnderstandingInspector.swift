@@ -12,13 +12,13 @@ struct UnderstandingInspector: View {
                 if snapshot?.state == "analyzing" { ProgressView().controlSize(.small) }
                 Text(label).font(.subheadline.weight(.medium))
                 Spacer()
-                if snapshot?.result != nil { Button("Suggestions") { showSuggestions = true } }
+                if snapshot?.result != nil { Button("Review Suggestions") { showSuggestions = true } }
                 if snapshot?.state == "complete" || snapshot?.state == "failed" {
-                    Button("Analyze Again", action: retry).disabled(isTrashed)
+                    Button("Suggest Again", action: retry).disabled(isTrashed)
                 }
             }
             if let result = snapshot?.result {
-                Text("\(result.provider) · \(result.confidence >= 0.90 ? "High confidence" : result.confidence >= 0.65 ? "Medium confidence" : "Low confidence")")
+                Text("\(Self.source(result.provider)) · \(Self.certainty(result.confidence))")
                     .font(.caption).foregroundStyle(.secondary)
                 if !result.note.isEmpty { Text(result.note).font(.caption).foregroundStyle(.secondary) }
             }
@@ -29,28 +29,38 @@ struct UnderstandingInspector: View {
                 if let result = snapshot?.result {
                     LabeledContent("Title", value: result.title.isEmpty ? "No suggestion" : result.title)
                     LabeledContent("Collection", value: result.collection.isEmpty ? "No suggestion" : result.collection)
-                    LabeledContent("Correspondent", value: result.correspondent.isEmpty ? "No suggestion" : result.correspondent)
-                    LabeledContent("Tags", value: result.tags.joined(separator: ", "))
+                    LabeledContent("From", value: result.correspondent.isEmpty ? "No suggestion" : result.correspondent)
+                    LabeledContent("Tags", value: result.tags.isEmpty ? "No suggestion" : result.tags.joined(separator: ", "))
                     Text(result.summary).textSelection(.enabled)
-                    if !result.evidence.isEmpty { Text("Evidence: “\(result.evidence)”").font(.caption).textSelection(.enabled) }
-                    Text("Applying uses the nonempty suggestions, adds the collection, and marks this document reviewed. It can replace your edited title, summary, correspondent, and tags.").font(.caption).foregroundStyle(.secondary)
+                    if !result.evidence.isEmpty { Text("Based on: “\(result.evidence)”").font(.caption).textSelection(.enabled) }
+                    Text("Using these fills in each suggested field, adds the collection, and marks the document reviewed. It replaces the title, summary, sender, and tags, including any you typed.").font(.caption).foregroundStyle(.secondary)
                     HStack {
                         Button("Cancel") { showSuggestions = false }
                         Spacer()
-                        Button("Apply Suggestions") { apply(); showSuggestions = false }.disabled(isTrashed || result.title.isEmpty)
+                        Button("Use Suggestions") { apply(); showSuggestions = false }.disabled(isTrashed || result.title.isEmpty)
                     }
                 }
             }.padding(24).frame(width: 520)
         }
     }
+
+    /// Provider names are stored identifiers ("Apple on-device model", "Local rules"); these are
+    /// only how they read to the owner.
+    static func source(_ provider: String) -> String {
+        provider == "Apple on-device model" ? "Suggested by Apple Intelligence" : "Suggested by StowKit's built-in rules"
+    }
+    static func certainty(_ confidence: Double) -> String {
+        confidence >= UnderstandingPolicy.automaticThreshold ? "Confident"
+            : confidence >= UnderstandingPolicy.filingThreshold ? "Fairly sure" : "Not sure — please check"
+    }
     private var label: String {
         switch snapshot?.state {
-        case "analyzing": "Understanding document…"
-        case "complete": "Document understanding"
-        case "failed": "Analysis needs attention"
-        case "paused": "Analysis paused in Trash"
-        case "queued": "Waiting to analyze"
-        default: "Analysis follows text extraction"
+        case "analyzing": "Reading the document for suggestions…"
+        case "complete": "Suggestions"
+        case "failed": "Couldn't make suggestions"
+        case "paused": "Suggestions paused in Trash"
+        case "queued": "Waiting to make suggestions"
+        default: "Suggestions come after the text is read"
         }
     }
 }

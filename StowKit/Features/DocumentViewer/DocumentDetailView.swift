@@ -19,26 +19,17 @@ struct DocumentDetailView: View {
     let setPinned: (Bool) -> Void
     let removeDownload: () -> Void
     @State private var showDetails = true
+    @State private var showMore = false
     @State private var quickLookURL: URL?
     @State private var originalError: String?
     @State private var localOriginalAvailable: Bool?
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(document.title).font(.title2.weight(.semibold)).textSelection(.enabled)
-                    HStack(spacing: 6) {
-                        Text(document.correspondent.isEmpty ? "No correspondent" : document.correspondent)
-                        Text("·")
-                        Text(document.formatLabel + (document.isImage ? " image" : " document"))
-                    }.font(.subheadline).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if document.needsReview {
-                    Label("Needs Review", systemImage: "circle.dotted").font(.caption).foregroundStyle(.orange)
-                }
-            }.padding(20)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(document.title).font(.title2.weight(.semibold)).textSelection(.enabled)
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
             Divider()
             // Not VSplitView: it tore down and rebuilt the preview pane ~20 times a second while
             // the parent redrew only 3 times, restarting its load each time. With PDFView that
@@ -49,71 +40,49 @@ struct DocumentDetailView: View {
                 if showDetails {
                     Divider()
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
-                                isTrashed: document.trashedAt != nil, retry: retryProcessing)
-                            UnderstandingInspector(snapshot: analysis, isTrashed: document.trashedAt != nil, retry: retryAnalysis, apply: applyAnalysis)
-                            StorageInspector(state: storageState, error: storageError,
-                                isTrashed: document.trashedAt != nil,
-                                setPinned: setPinned, removeDownload: removeDownload)
-                            Divider()
+                        // What the owner does comes first; how StowKit processed it is folded away.
+                        VStack(alignment: .leading, spacing: 16) {
                             if document.trashedAt != nil {
-                                HStack {
-                                    Label("This document is in Trash", systemImage: "trash").foregroundStyle(.secondary)
-                                    Spacer()
-                                    Button("Restore", action: trashOrRestore)
-                                }
-                                Divider()
+                                banner(symbol: "trash", tint: .secondary, title: "In Trash",
+                                       detail: "Restore it to organize it again.") { Button("Restore", action: trashOrRestore) }
                             } else if document.needsReview {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("A quick look before you stow").font(.subheadline.weight(.medium))
-                                        Text("Add the details and collections you want to keep.").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
+                                banner(symbol: "circle.fill", tint: .orange, title: "Needs review",
+                                       detail: "Check the title, date, and collection, then mark it reviewed.") {
                                     Button("Mark Reviewed") { document.needsReview = false }
                                 }
-                                Divider()
                             }
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Summary").font(.headline)
-                                TextField("Summary", text: $document.summary, axis: .vertical)
-                                    .textFieldStyle(.plain).font(.subheadline).foregroundStyle(.secondary)
-                            }
+                            if processingNeedsAttention { processingInspector }
                             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 11) {
                                 field("Title") { TextField("Title", text: $document.title) }
-                                field("Correspondent") { TextField("Correspondent", text: $document.correspondent) }
-                                field("Document date") {
-                                    DatePicker("Document date", selection: $document.documentDate, displayedComponents: .date).labelsHidden()
+                                field("Date") {
+                                    DatePicker("Date", selection: $document.documentDate, displayedComponents: .date).labelsHidden()
                                 }
-                                field("Collections") {
-                                    HStack {
-                                        Text(document.collections.sorted().joined(separator: ", ")).lineLimit(2)
-                                        Spacer()
-                                        Menu {
-                                            ForEach(collections) { collection in
-                                                Toggle(collection.name, isOn: Binding(get: { document.collections.contains(collection.name) }, set: { included in
-                                                    if included { document.collections.insert(collection.name) }
-                                                    else { document.collections.remove(collection.name) }
-                                                }))
-                                            }
-                                        } label: { Image(systemName: "folder.badge.gearshape") }
-                                        .menuStyle(.borderlessButton).fixedSize().help("Edit Collections").accessibilityLabel("Edit Collections")
-                                    }
-                                }
-                                field("Tags") { TextField("Comma-separated tags", text: $document.tags) }
-                                field("Entities") { TextField("People, products, or places", text: $document.entities) }
+                                field("From") { TextField("Who sent or issued it", text: $document.correspondent) }
+                                field("Collections") { collectionsControl }
+                                field("Tags") { TextField("Separate tags with commas", text: $document.tags) }
+                                field("Summary") { TextField("A sentence about this document", text: $document.summary, axis: .vertical) }
                             }.textFieldStyle(.roundedBorder).font(.subheadline)
-                            Divider()
-                            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
-                                field("Original file") { Text(document.originalFilename).textSelection(.enabled).lineLimit(2) }
-                                field("Storage") { Label(localOriginalAvailable == true ? "Available offline" : "Original not downloaded", systemImage: localOriginalAvailable == true ? "internaldrive" : "icloud") }
-                                field("File size") { Text(ByteCountFormatter.string(fromByteCount: document.fileSize, countStyle: .file)) }
-                                field("Imported") { Text(document.importedAt, format: .dateTime.month().day().year()) }
-                                field("Processing") { Text(processing?.progressLabel ?? "Queued") }
-                            }.font(.caption).foregroundStyle(.secondary)
+                            UnderstandingInspector(snapshot: analysis, isTrashed: document.trashedAt != nil, retry: retryAnalysis, apply: applyAnalysis)
+                            DisclosureGroup("More Details", isExpanded: $showMore) {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    if !processingNeedsAttention { processingInspector }
+                                    StorageInspector(state: storageState, error: storageError,
+                                        isTrashed: document.trashedAt != nil,
+                                        setPinned: setPinned, removeDownload: removeDownload)
+                                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
+                                        field("People & things") {
+                                            TextField("Names of people, products, or places", text: $document.entities)
+                                                .textFieldStyle(.roundedBorder)
+                                        }
+                                        field("Original file") { Text(document.originalFilename).textSelection(.enabled).lineLimit(2) }
+                                        field("Stored") { Label(localOriginalAvailable == true ? "On this Mac" : "In iCloud, not downloaded", systemImage: localOriginalAvailable == true ? "internaldrive" : "icloud") }
+                                        field("File size") { Text(ByteCountFormatter.string(fromByteCount: document.fileSize, countStyle: .file)) }
+                                        field("Added") { Text(document.importedAt, format: .dateTime.month().day().year()) }
+                                    }.font(.caption).foregroundStyle(.secondary)
+                                }.padding(.top, 10)
+                            }.font(.subheadline)
                         }.padding(20)
-                    }.frame(minHeight: 180, idealHeight: 300, maxHeight: 350)
+                    }.frame(minHeight: 240, idealHeight: 380, maxHeight: 480)
                 }
             }
         }
@@ -144,6 +113,58 @@ struct DocumentDetailView: View {
         } message: { Text(originalError ?? "") }
     }
 
+    /// Header line: who it is from, its date, and its kind, skipping anything unknown.
+    private var subtitle: String {
+        var parts: [String] = []
+        if !document.correspondent.isEmpty { parts.append(document.correspondent) }
+        parts.append(document.documentDate.formatted(date: .abbreviated, time: .omitted))
+        parts.append(document.formatLabel + (document.isImage ? " image" : " document"))
+        return parts.joined(separator: " · ")
+    }
+    /// A failed or in-progress read is something to act on or wait for, so it stays in view.
+    private var processingNeedsAttention: Bool {
+        processing?.state == .failed || processing?.state.isActive == true
+    }
+    private var processingInspector: some View {
+        ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
+            isTrashed: document.trashedAt != nil, retry: retryProcessing)
+    }
+    private var collectionsControl: some View {
+        HStack(spacing: 6) {
+            if document.collections.isEmpty {
+                Text("None yet").foregroundStyle(.secondary)
+            } else {
+                ForEach(document.collections.sorted(), id: \.self) { name in
+                    Text(name).font(.caption).lineLimit(1)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(.quaternary, in: Capsule())
+                }
+            }
+            Spacer(minLength: 4)
+            Menu {
+                ForEach(collections) { collection in
+                    Toggle(collection.name, isOn: Binding(get: { document.collections.contains(collection.name) }, set: { included in
+                        if included { document.collections.insert(collection.name) }
+                        else { document.collections.remove(collection.name) }
+                    }))
+                }
+            } label: {
+                Label(document.collections.isEmpty ? "Add to Collection" : "Change", systemImage: "folder.badge.plus")
+            }.menuStyle(.borderlessButton).fixedSize()
+        }
+    }
+    private func banner<Action: View>(symbol: String, tint: Color, title: String, detail: String,
+                                      @ViewBuilder action: () -> Action) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: symbol == "circle.fill" ? 8 : 13)).foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.medium))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            action()
+        }.padding(10).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
     private var preview: some View {
         DocumentPreview(document: document, storage: storage, thumbnails: thumbnails, localAvailable: $localOriginalAvailable)
     }

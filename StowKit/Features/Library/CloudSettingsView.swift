@@ -30,7 +30,7 @@ struct CloudSettingsView: View {
                     }
                 }
             }
-            Text("Originals, metadata, and extracted text sync through iCloud. OCR and document understanding stay on your Mac. Local originals are retained; automatic storage eviction is not enabled.")
+            Text("Your documents, their details, and their text sync through iCloud. Reading text and making suggestions always happen on your Mac. Documents stay on this Mac unless you remove a download.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .confirmationDialog("Enable iCloud for this archive?", isPresented: $confirmEnable, titleVisibility: .visible) {

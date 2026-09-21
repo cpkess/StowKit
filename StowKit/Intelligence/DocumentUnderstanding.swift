@@ -41,7 +41,7 @@ enum UnderstandingPolicy {
         }
         if !result.confidence.isFinite { result.confidence = 0 }
         result.confidence = min(1, max(0, result.confidence))
-        if input.truncated { result.confidence = min(result.confidence, 0.64); result.note = "Only an excerpt was analyzed. Review the full document before filing." }
+        if input.truncated { result.confidence = min(result.confidence, 0.64); result.note = "Based on the first pages only. Check the rest before filing." }
         return result
     }
     static func merge(_ result: DocumentUnderstanding, into document: HouseholdDocument, protected: Set<String>, explicit: Bool = false) -> HouseholdDocument {

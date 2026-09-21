@@ -17,7 +17,7 @@ struct ProcessingInspector: View {
                     Image(systemName: snapshot?.state == .failed ? "exclamationmark.circle" : "text.viewfinder")
                         .foregroundStyle(snapshot?.state == .failed ? Color.orange : Color.secondary)
                 }
-                Text(snapshot?.progressLabel ?? "Waiting to extract text").font(.subheadline.weight(.medium))
+                Text(snapshot?.progressLabel ?? "Waiting to read text").font(.subheadline.weight(.medium))
                 Spacer()
                 Button("View Text") { showText = true }
                     .disabled((snapshot?.completedPages ?? 0) == 0 || service == nil)
@@ -25,9 +25,9 @@ struct ProcessingInspector: View {
                     Button("Retry") { retry(false) }
                 }
                 Menu {
-                    Button("Extract Again") { retry(true) }
-                } label: { Image(systemName: "ellipsis.circle") }
-                    .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Text Extraction Actions")
+                    Button("Read Text Again") { retry(true) }
+                } label: { Label("Text Actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
+                    .menuStyle(.borderlessButton).fixedSize().help("Text Actions")
                     .disabled(snapshot?.state.isActive == true || snapshot?.state == .queued || isTrashed)
             }
             if let snapshot {
@@ -53,10 +53,10 @@ struct ProcessingInspector: View {
                 } else if snapshot.state == .complete {
                     Text(snapshot.characterCount == 0
                          ? "No readable text was found. You can still preview, organize, and open this document."
-                         : "\(snapshot.pageCount) page(s) · \(snapshot.ocrPages) read with OCR · Processed on this Mac")
+                         : Self.completeCaption(pages: snapshot.pageCount, scanned: snapshot.ocrPages))
                         .font(.caption).foregroundStyle(.secondary)
                 } else if snapshot.state == .queued {
-                    Text("Your original is available while text extraction waits in the background.")
+                    Text("You can use this document now. Its text will be read in the background.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -64,6 +64,12 @@ struct ProcessingInspector: View {
         .sheet(isPresented: $showText) {
             ExtractedTextView(documentID: documentID, snapshot: snapshot, service: service)
         }
+    }
+
+    static func completeCaption(pages: Int, scanned: Int) -> String {
+        let pageText = pages == 1 ? "1 page" : "\(pages) pages"
+        let scans = scanned == 0 ? "" : scanned == pages ? ", all scanned" : ", \(scanned) scanned"
+        return "Searchable text from \(pageText)\(scans), read on this Mac."
     }
 }
 
@@ -80,8 +86,8 @@ private struct ExtractedTextView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Extracted Text").font(.title2.weight(.semibold))
-                    Text("OCR may contain mistakes. The original document is unchanged.")
+                    Text("Document Text").font(.title2.weight(.semibold))
+                    Text("Text read from scans can contain mistakes. The original document is unchanged.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -99,7 +105,7 @@ private struct ExtractedTextView: View {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         ForEach(pages) { page in
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Page \(page.index + 1) · \(page.method == .embedded ? "PDF text" : "OCR")")
+                                Text("Page \(page.index + 1) · \(page.method == .embedded ? "Text in the PDF" : "Read from the scan")")
                                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                                 Text(page.text.isEmpty ? "No text found on this page." : page.text)
                                     .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)

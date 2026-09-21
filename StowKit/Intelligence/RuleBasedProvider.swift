@@ -18,13 +18,13 @@ struct RuleBasedProvider: DocumentIntelligenceProvider {
             return hits.isEmpty ? nil : (title, collection, hits)
         }.sorted { $0.2.count > $1.2.count }
         guard let best = matches.first else {
-            return DocumentUnderstanding(note: "No reliable document type was recognized. Manual organization is available.")
+            return DocumentUnderstanding(note: "StowKit couldn't tell what kind of document this is. You can file it yourself.")
         }
         let ambiguous = matches.dropFirst().contains { $0.2.count >= best.2.count }
         let score = ambiguous ? 0.4 : (best.2.count >= 2 ? 0.92 : 0.70)
         return UnderstandingPolicy.validated(DocumentUnderstanding(title: best.0, documentType: best.0,
             collection: best.1, tags: [best.0.lowercased().replacingOccurrences(of: " ", with: "-")],
             summary: "Recognized document: \(best.0.lowercased()).", evidence: best.2[0], confidence: score,
-            note: ambiguous ? "More than one document type matched. Review the suggested collection." : "Matched \(best.2.count) document-type cue(s)."), input: input)
+            note: ambiguous ? "This could be more than one kind of document. Check the suggested collection." : "Recognized from \(best.2.count) clue\(best.2.count == 1 ? "" : "s") in the text."), input: input)
     }
 }

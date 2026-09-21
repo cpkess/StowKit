@@ -6,11 +6,11 @@ enum ProcessingState: String, Codable, Sendable {
     var label: String {
         switch self {
         case .remote: "Text is downloading from iCloud"
-        case .queued: "Waiting to extract text"
-        case .extractingText: "Extracting text"
+        case .queued: "Waiting to read text"
+        case .extractingText: "Reading text"
         case .savingText: "Saving text"
-        case .complete: "Text extraction complete"
-        case .failed: "Text extraction failed"
+        case .complete: "Text ready"
+        case .failed: "Couldn't read text"
         case .paused: "Paused in Trash"
         }
     }
