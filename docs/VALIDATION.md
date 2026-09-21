@@ -1,5 +1,63 @@
 # Validation
 
+## Launch freeze traced to a transient system Vision state
+
+September 20, 2026: the installed v0.6.0-alpha.2 froze on launch from `/Applications`. The
+cause was a macOS text-recognition state that a restart cleared. **No StowKit code was
+changed**, and the app has not been shown to be at fault.
+
+`sample` on the frozen process reported `Dispatch Thread Soft Limit: 64 reached in 2018 of
+2018 samples -- too many dispatch threads blocked in synchronous operations`, with a 1.7 GB
+footprint and 394 threads. The blocked threads were PDFKit's own Live Text analyzer, not
+StowKit's extraction pipeline:
+
+```text
+-[PDFView visiblePagesChanged:] -> +[PDFPageAnalyzerV2 analyzePage:withBox:requestTypes:]
+  -> -[VNRecognizeDocumentsRequest internalPerformRevision:inContext:error:]
+  -> -[VNControlledCapacityTasksQueue dispatchSyncByPreservingQueueCapacity:]  (blocked)
+```
+
+The frozen app would not answer a Quit Apple Event and had to be killed.
+
+| Measurement | Frozen | After restart |
+| --- | --- | --- |
+| Threads | 394 | 5 |
+| PDFKit analyzer threads | 261 | 0 |
+| Vision threads | 64 | 0 |
+| Footprint | 1.8 GB | 49.5 MB |
+| Dispatch thread soft limit | hit in every sample | not hit |
+| `osascript ... get its name` | hung | 0.1 s |
+
+Ruled out by measurement, not by reasoning:
+
+- **Not an old build.** The current `main` build reproduced it identically (261 analyzer
+  threads, 1.8 GB), so reinstalling would not have helped.
+- **Not StowKit's OCR.** A build with `processingEnabled: false` still froze (278 analyzer
+  threads, 353 Vision threads, 1.9 GB).
+- **Not a recently deleted document.** The freeze was first reproduced before that deletion.
+- **Not redundant `autoScales` writes in `PDFPreview.updateNSView`.** Guarding them changed
+  nothing (264 threads) and the change was reverted.
+
+**Correction to the entry below.** "Framework logs still include ... Vision model-resource
+messages; their presence did not fail the assertions" and the later note calling the `e5rt`
+fallback "a logged warning, not a failure" both understated these. Those messages were the
+signature of the degraded state that produced this freeze. The single-threaded test suite
+passed through it because it performs one recognition at a time; it took PDFKit's concurrent
+per-page analysis to turn the same state into thread-pool starvation. After the restart the
+`e5rt` messages are **absent entirely**.
+
+The Vision cold-start cost is unchanged by the restart — 45.1 s first request, 0.08 s warm,
+measured again with the standalone probe — so that remains a property of this macOS build and
+is independent of the failure above.
+
+**Not established.** Why the degraded state arose, whether it recurs, and whether PDFKit's
+analyzer is the only way to trigger it. A minimal `PDFView` harness (250-page text PDF, then a
+20-page image-only PDF) produced zero analyzer threads, but its window may never have become
+genuinely visible, so it does not isolate anything. If this recurs, the defensive fix is to
+render previews with `CGPDFDocument` — which the thumbnail and OCR paths already use — rather
+than `PDFView`, so the app cannot wedge itself when Vision is unwell. `PDFView` has a
+`setDocumentAnalysisEnabled:` selector at runtime, but it is not in the SDK and was not used.
+
 ## Optimized storage, step 2: pins and manual eviction
 
 September 20, 2026: `DocumentStorageManager.evictOriginal` is the only place StowKit removes a

@@ -139,15 +139,21 @@ both places. Don't "simplify" that away.
 
 ## Known issues / traps
 
-- **The macOS 27 OCR failure does not reproduce** — re-tested 2026-09-20 in both the default
-  build (95 tests, 0 failures) and the provisioned, entitled, sandboxed build (13 processing
-  tests, 0 failures). The `e5rt` log lines name *system* model bundles under
-  `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, which hold flat
-  CoreML content instead of the per-hardware sub-bundles the E5 runtime wants; Vision falls
-  back and still returns correct text. There is no StowKit-generated E5 cache — the earlier
-  "app's generated cache" diagnosis was wrong. Why the original run failed is still unknown,
-  so if it recurs, capture the full `e5rt`/`e5rtError` output and build configuration *before*
-  rebuilding. Don't add a speculative workaround; one was already tried and reverted.
+- **`e5rt` log lines mean macOS text recognition is in a degraded state — do not dismiss them.**
+  They name *system* model bundles under
+  `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, not any
+  StowKit-generated cache (that earlier diagnosis was wrong; no such cache exists). While they
+  were present on 2026-09-20 the app froze on launch: PDFKit's own Live Text analyzer piled up
+  261 blocked Vision requests and starved the dispatch pool at 1.8 GB. The test suite passed
+  straight through it, because it runs one recognition at a time — so **green tests do not
+  clear this**. A restart removed the messages and the freeze. If they reappear, capture a
+  `sample` of the process before doing anything else.
+- **A launch freeze is probably not our bug, but check before assuming either way.** The
+  2026-09-20 freeze reproduced in the shipped build *and* current `main`, survived disabling
+  our own OCR, and vanished on restart. `docs/VALIDATION.md` has the full method. If it
+  recurs, the defensive fix is to preview with `CGPDFDocument` (already used by thumbnails and
+  OCR) instead of `PDFView`. `PDFView.setDocumentAnalysisEnabled:` exists at runtime but is
+  not public SDK API — ask before using it.
 - **First Vision call costs ~46s cold, ~0.08s warm**, measured in a standalone tool with no
   StowKit code — it is Apple's cost, not ours. The warm state is shared across processes but
   expires after idle, so this *recurs*; it is not a one-time first-launch charge. Extraction
@@ -170,10 +176,11 @@ both places. Don't "simplify" that away.
 
 1. **Household sharing acceptance** — two iCloud accounts, two Macs, against the checklist in
    `docs/ICLOUD_SETUP.md`. This is the blocking gate for calling iCloud ready.
-2. **Optimized storage** (brief §21) — designed in `docs/STORAGE_ARCHITECTURE.md`, not built.
-   Nothing is evicted today. Sequence: disk accounting first (none exists), then pins plus
-   manual "Remove Download" (`OriginalState.pinned` already exists and is unused, so no
-   migration), then a V9 `lastAccessedAt` before any automatic policy.
+2. **Optimized storage** (brief §21) — designed in `docs/STORAGE_ARCHITECTURE.md`. Steps 1
+   (disk accounting, `DocumentStorageManager.usage()`) and 2 (pins plus manual "Remove
+   Download" through the single guarded `evictOriginal`) are built, tested against the fake
+   transport only. Nothing evicts automatically. Hold step 3 (V9 `lastAccessedAt` and an
+   automatic policy) until manual eviction has been used on a real archive.
 3. Cloud thumbnails; extractor-version negotiation.
 4. Push subscriptions / background sync (foreground-only today).
 5. Permanent deletion + real deletion reconciliation.
