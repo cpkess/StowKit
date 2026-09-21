@@ -1,5 +1,28 @@
 # Validation
 
+## 1.2.0 test build on the owner's real archive
+
+September 21, 2026: version 1.2.0, build 8, built with `scripts/build-distribution.sh` (Developer ID,
+Production, not notarized; all of the script's checks passed). The signed Info.plist has
+`CFBundleIconName` AppIcon and `Production`; the entitlements include
+`files.user-selected.read-write` and `files.bookmarks.app-scope`. 1.1.0 was quit and the test build
+launched with `open --stderr` on this Mac (Apple Silicon, macOS 27), owner's account. Observed:
+
+- It opened the owner's real archive (`Application Support/StowKit`), not the `CloudArchives` copy
+  1.1.0 had been reopening. The sidebar showed "iCloud"; its popover read "Up to date".
+- iCloud was back on without the owner doing anything: the resolver's `.connect` for a binding the old bug
+  had disabled.
+- Settings → Measure Disk Use listed no "Other iCloud archives", a line shown only when
+  `CloudArchives/` holds data, so `ArchiveCopies` removed the duplicate copy (its only content).
+- The NovoCare form in the real archive already had an Apple Intelligence suggestion, rated
+  "Not sure — please check", so its fields were not filled automatically. The missing suggestions
+  the owner saw belonged to the duplicate copy only.
+- stderr stayed empty.
+
+**Not established.** The container is protected from the shell, so the copy's removal is inferred
+from the usage figure, not listed. The sync after reconnecting was not compared record by record
+with iCloud. The inbox folder has not yet been used with a real iCloud Drive folder or a phone.
+
 ## Inbox folder, for adding documents from a phone (unreleased)
 
 September 21, 2026, after `3eb2556`. Settings → Inbox Folder takes a folder, remembered with a
