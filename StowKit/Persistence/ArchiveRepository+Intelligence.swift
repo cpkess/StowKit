@@ -27,6 +27,40 @@ extension ArchiveRepository {
             record.state = try processingJob(new.id)?.state == "complete" ? "queued" : "waitingText"
         }
     }
+    /// One-time pass for documents imported before filenames were cleaned up. Replaces a title or
+    /// date only while it is still exactly what import derived from the filename, never touches a
+    /// protected title, and deliberately bypasses `update`, which would record it as a manual edit
+    /// and lock the title against better suggestions. Also re-queues analyses that fell back to
+    /// rules, most of which Apple's model refused before the guardrail retry existed.
+    func refreshAutomaticMetadataOnce() throws {
+        let key = "automatic-metadata-v1"
+        if try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first?.value == "done" { return }
+        do {
+            for record in try context.fetch(FetchDescriptor<Record>()) {
+                var document = record.document
+                let raw = URL(fileURLWithPath: document.originalFilename).deletingPathExtension().lastPathComponent
+                let derived = FilenameMetadata(filename: document.originalFilename)
+                let analysis = try analysis(document.id)
+                let protected = Set(analysis?.protectedFields ?? UnderstandingPolicy.fields)
+                var changed = false
+                if document.title == raw, derived.title != raw, !protected.contains("title") { document.title = derived.title; changed = true }
+                if document.documentDate == document.importedAt, let date = derived.date { document.documentDate = date; changed = true }
+                if changed {
+                    record.updateMetadata(from: document)
+                    markSearchChanged(document.id)
+                    try journalDocument(document)
+                }
+                if let analysis, document.trashedAt == nil, analysis.snapshot.result?.provider == "Local rules" {
+                    analysis.revision += 1
+                    analysis.state = try processingJob(document.id)?.state == "complete" ? "queued" : "waitingText"
+                    analysis.error = nil
+                }
+            }
+            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = "done" }
+            else { context.insert(Checkpoint(key, value: "done")) }
+            try save()
+        } catch { context.rollback(); throw error }
+    }
     func queueAnalysis(_ id: UUID, reset: Bool = false) throws {
         let record: Analysis
         if let existing = try analysis(id) { record = existing }

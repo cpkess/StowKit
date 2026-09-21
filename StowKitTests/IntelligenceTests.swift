@@ -217,6 +217,86 @@ import FoundationModels
         XCTAssertEqual(result.provider, "Local rules")
         XCTAssertEqual(result.collection, "Insurance")
     }
+    func testAutomaticMetadataRefreshCleansFilenameTitlesOnceWithoutProtectingThem() throws {
+        let imported = Date(timeIntervalSince1970: 1_790_000_000)
+        func insert(_ filename: String, title: String) throws -> HouseholdDocument {
+            let id = UUID()
+            let document = HouseholdDocument(id: id, archiveID: repository.archiveID, title: title, originalFilename: filename,
+                documentDate: imported, importedAt: imported, modifiedAt: imported, contentType: "com.adobe.pdf",
+                contentHash: id.uuidString, fileSize: 100, relativePath: "synthetic")
+            try repository.insert(document)
+            return document
+        }
+        let raw = try insert("Water_Bill_2026-03-15T08_00_00Z.pdf", title: "Water_Bill_2026-03-15T08_00_00Z")
+        let owned = try insert("Scan_2026-04-01.pdf", title: "Scan_2026-04-01")
+        var edited = try XCTUnwrap(repository.document(owned.id))
+        edited.title = "Scan_2026-04-01"; edited.summary = "touched"   // a manual edit that leaves the title raw
+        try repository.update(edited)
+        var retitled = try XCTUnwrap(repository.document(owned.id)); retitled.title = "Kept by hand"
+        try repository.update(retitled)
+
+        try repository.refreshAutomaticMetadataOnce()
+        let cleaned = try XCTUnwrap(repository.document(raw.id))
+        XCTAssertEqual(cleaned.title, "Water Bill")
+        XCTAssertEqual(Calendar.current.dateComponents([.year, .month, .day], from: cleaned.documentDate),
+                       DateComponents(year: 2026, month: 3, day: 15))
+        XCTAssertFalse(try XCTUnwrap(repository.analysis(raw.id)).protectedFields.contains("title"),
+                       "an automatic cleanup must not lock the title against better suggestions")
+        XCTAssertEqual(try repository.document(owned.id)?.title, "Kept by hand", "a hand-edited title is never replaced")
+
+        let late = try insert("Late_2026-05-01.pdf", title: "Late_2026-05-01")
+        try repository.refreshAutomaticMetadataOnce()
+        XCTAssertEqual(try repository.document(late.id)?.title, "Late_2026-05-01", "the pass runs once per archive")
+    }
+    func testAutomaticMetadataRefreshRequeuesRuleBasedAnalyses() async throws {
+        let document = try seed()
+        await run(provider: RuleBasedProvider())
+        XCTAssertEqual(try repository.analysis(document.id)?.snapshot.result?.provider, "Local rules")
+        try repository.refreshAutomaticMetadataOnce()
+        XCTAssertEqual(try repository.analysis(document.id)?.state, "queued",
+                       "documents the model never read get another chance now that refusals are retried")
+    }
+    func testLabeledModelAnswerParsesAndIgnoresNoise() {
+        let fields = ModelFields.parseLabeled("""
+        Here is the result:
+        - TITLE: Prior Authorization Request
+        TYPE: Patient authorization form
+        collection: Medical
+        CORRESPONDENT: Example Health Pharmacy
+        TAGS: pharmacy, authorization,  , prescription
+        SUMMARY: A request for prior authorization of a prescription.
+        EVIDENCE: Patient authorization form
+        NOTE: ignored
+        """)
+        XCTAssertEqual(fields.title, "Prior Authorization Request")
+        XCTAssertEqual(fields.documentType, "Patient authorization form")
+        XCTAssertEqual(fields.collection, "Medical", "labels are case-insensitive")
+        XCTAssertEqual(fields.correspondent, "Example Health Pharmacy")
+        XCTAssertEqual(fields.tags, ["pharmacy", "authorization", "prescription"])
+        XCTAssertEqual(fields.evidence, "Patient authorization form")
+        XCTAssertEqual(ModelFields.parseLabeled("no labels at all"), ModelFields())
+        // Observed live on macOS 27: every field on one line, separated by " / ".
+        let oneLine = ModelFields.parseLabeled("TITLE: Prior Authorization Request / TYPE: Medical / COLLECTION: Medical / CORRESPONDENT: Example Health Pharmacy / TAGS: Authorization, Pharmacy / SUMMARY: A request. / EVIDENCE: Patient authorization form")
+        XCTAssertEqual(oneLine.title, "Prior Authorization Request")
+        XCTAssertEqual(oneLine.collection, "Medical")
+        XCTAssertEqual(oneLine.tags, ["Authorization", "Pharmacy"])
+        XCTAssertEqual(oneLine.evidence, "Patient authorization form")
+    }
+    /// Live, on this Mac: Apple's default guardrails refuse medical text, which used to drop
+    /// every medical record to the rule-based fallback. Skips where the model is unavailable.
+    func testOnDeviceModelReadsMedicalDocumentsInsteadOfFallingBack() async throws {
+        guard #available(macOS 26.0, *), SystemLanguageModel.default.availability == .available else {
+            throw XCTSkip("Apple's on-device model is not available on this Mac")
+        }
+        let document = try seed()
+        let text = "Example Health Pharmacy. Patient authorization form. Prior authorization request for a weight management medication. Member ID FAKE-123. Prescriber signature required."
+        let input = UnderstandingInput(document: document, text: text, collections: ["Medical", "Insurance", "Receipts"], truncated: false)
+        let result = try await AppleFoundationModelProvider().understand(input)
+        XCTAssertEqual(result.provider, "Apple on-device model")
+        XCTAssertFalse(result.title.isEmpty)
+        let fallback = try await LocalIntelligenceProvider().understand(input)
+        XCTAssertEqual(fallback.provider, "Apple on-device model", "the medical record must not fall back to rules")
+    }
     private func seedV3(root: URL, document: HouseholdDocument) throws {
         let schema = Schema(versionedSchema: ArchiveSchemaV3.self)
         let config = ModelConfiguration("StowKit", schema: schema, url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)

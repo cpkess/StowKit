@@ -14,9 +14,9 @@ struct ImportReceipt: Codable, Sendable {
     let relativePath: String
 
     func document(archiveID: UUID) -> HouseholdDocument {
-        HouseholdDocument(id: id, archiveID: archiveID,
-            title: URL(fileURLWithPath: originalFilename).deletingPathExtension().lastPathComponent,
-            originalFilename: originalFilename, documentDate: importedAt, importedAt: importedAt,
+        let derived = FilenameMetadata(filename: originalFilename)
+        return HouseholdDocument(id: id, archiveID: archiveID, title: derived.title,
+            originalFilename: originalFilename, documentDate: derived.date ?? importedAt, importedAt: importedAt,
             modifiedAt: importedAt, contentType: contentType, contentHash: contentHash,
             fileSize: fileSize, relativePath: relativePath)
     }

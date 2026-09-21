@@ -195,6 +195,8 @@ final class LibraryStore {
             } catch {
                 errorMessage = "Some interrupted imports need attention. Their recovery files have been kept.\n\n\(error.localizedDescription)"
             }
+            // Best effort: it rolls back on failure and simply runs again on the next launch.
+            try? repository.refreshAutomaticMetadataOnce()
             collections = try repository.collections()
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value

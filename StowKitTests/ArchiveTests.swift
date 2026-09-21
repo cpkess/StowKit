@@ -290,6 +290,36 @@ import UniformTypeIdentifiers
         XCTAssertEqual(try Data(contentsOf: storage.originalURL(for: document.relativePath)), bytes)
     }
 
+    func testFilenameMetadataCleansTitlesAndReadsYearFirstDates() {
+        let calendar = Calendar.current
+        func ymd(_ date: Date?) -> DateComponents? { date.map { calendar.dateComponents([.year, .month, .day], from: $0) } }
+        let export = FilenameMetadata(filename: "NovoCare_Patient_OBES_Patient_Authorization_FORM_2026-09-17T00_18_36Z.pdf")
+        XCTAssertEqual(export.title, "NovoCare Patient OBES Patient Authorization FORM")
+        XCTAssertEqual(ymd(export.date), DateComponents(year: 2026, month: 9, day: 17))
+        XCTAssertEqual(ymd(FilenameMetadata(filename: "Scan_20260412_101530.png").date), DateComponents(year: 2026, month: 4, day: 12))
+        XCTAssertEqual(FilenameMetadata(filename: "Scan_20260412_101530.png").title, "Scan")
+        XCTAssertEqual(ymd(FilenameMetadata(filename: "Tax Return 2025_04_15.pdf").date), DateComponents(year: 2025, month: 4, day: 15))
+        // Unchanged: ordinary names, invalid dates, ambiguous month-first dates, bare years.
+        XCTAssertEqual(FilenameMetadata(filename: "Property Tax.pdf"), FilenameMetadata(filename: "Property Tax.pdf"))
+        XCTAssertEqual(FilenameMetadata(filename: "Property Tax.pdf").title, "Property Tax")
+        XCTAssertNil(FilenameMetadata(filename: "Property Tax.pdf").date)
+        XCTAssertNil(FilenameMetadata(filename: "Invoice 2026-02-30.pdf").date, "February 30th is not a date")
+        XCTAssertNil(FilenameMetadata(filename: "Invoice 03-04-2026.pdf").date, "month-first dates are ambiguous")
+        XCTAssertNil(FilenameMetadata(filename: "Pre-Approval 2026.pdf").date)
+        XCTAssertEqual(FilenameMetadata(filename: "Pre-Approval 2026.pdf").title, "Pre-Approval 2026", "hyphens inside words survive")
+        XCTAssertEqual(FilenameMetadata(filename: "2026-09-17.pdf").title, "2026-09-17", "never an empty title")
+    }
+
+    func testImportUsesCleanTitleAndFilenameDate() async throws {
+        let document = try await importer.importFile(pdf("Water_Bill_2026-03-15.pdf")).document
+        XCTAssertEqual(document.title, "Water Bill")
+        XCTAssertEqual(Calendar.current.dateComponents([.year, .month, .day], from: document.documentDate),
+                       DateComponents(year: 2026, month: 3, day: 15))
+        XCTAssertEqual(document.originalFilename, "Water_Bill_2026-03-15.pdf", "the original filename is kept exactly")
+        let plain = try await importer.importFile(pdf("Receipt.pdf", width: 600)).document   // distinct bytes, not a duplicate
+        XCTAssertEqual(plain.documentDate, plain.importedAt, "with no date in the name, the import date stands in")
+    }
+
     func testUsageMeasuresDiskAndSeparatesOriginalsFromDerivedData() async throws {
         let empty = try await storage.usage()
         XCTAssertEqual(empty.originals, 0)
