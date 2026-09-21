@@ -1,5 +1,23 @@
 # Validation
 
+## Sparkle updates end to end: 1.2.9 → published 1.3.0
+
+September 21, 2026, owner's Mac. From `2720ebd` in a temporary worktree, a signed Developer ID build
+labelled 1.2.9 (build 8), otherwise identical to 1.3.0, was run from a scratch folder. StowKit →
+Check for Updates… fetched the live feed (`releases/latest/download/appcast.xml`) and offered
+"StowKit 1.3.0 is now available—you have 1.2.9". Install Update downloaded the published DMG,
+installed it, and relaunched the app (new process). Afterwards the app at that location reported
+1.3.0 (9), passed `codesign --verify --deep --strict` and `spctl` (Notarized Developer ID), and its
+executable's SHA-256 matched the 1.3.0 release build exactly. The feed, EdDSA signature, sandboxed
+installer service, and mach-lookup exceptions therefore all work together in a real install.
+
+Cosmetic: the update window shows the whole GitHub release page as release notes, because the
+appcast uses `releaseNotesLink`. Embedding the notes as the item's description would read better.
+
+**Not established.** The install replaced an app in a user-writable scratch folder, not
+`/Applications`; installing there may ask for an administrator password depending on ownership.
+Automatic (silent) installation was not tried.
+
 ## 1.3.0 release build
 
 September 21, 2026: version 1.3.0, build 9, from `2720ebd`, built with
