@@ -1,5 +1,21 @@
 # Validation
 
+## 1.3.0 release build
+
+September 21, 2026: version 1.3.0, build 9, from `2720ebd`, built with
+`scripts/build-distribution.sh`; all of its checks passed, including the new Sparkle feed, key, and
+team checks. App and Sparkle framework are universal (`x86_64 arm64`); Production; no runner or
+probe strings. App notarization `a5f3da18-2c7b-42d0-8c78-5aa9d5426fbb`, DMG notarization
+`c9d3c972-9ebf-49a0-8e1f-2a8277f26015`, both Accepted, stapled, and accepted by Gatekeeper. DMG
+SHA-256, regenerated after stapling: `31932c312093068fc65f4dc364e1429d5c26c034e0910124ecacf82aad1c9ed7`
+(4,992,522 bytes). The mounted image holds `StowKit.app` and `Applications`; the app passes
+`codesign --verify --deep --strict` and `spctl`. `scripts/make-appcast.sh` wrote and signed
+`appcast.xml` (build 9, length 4,992,522); `sign_update` waited on a Keychain prompt for the
+`stowkit` key until the owner approved it.
+
+**Not established.** This exact binary was not launched against the owner's archive (the same
+source ran as the signed test build in the entry below). No update has been installed by Sparkle.
+
 ## Sparkle updater, and a test that erased the owner's inbox folder (unreleased)
 
 September 21, 2026, 1.3.0 (9) signed test builds on the owner's Mac.

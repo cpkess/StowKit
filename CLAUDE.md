@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.3.0, build 9 (unreleased). The app icon is
+- Deployment target macOS 14.0. Current version 1.3.0, build 9 (released 2026-09-21). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
@@ -140,7 +140,7 @@ scripts/make-appcast.sh build/releases/StowKit-<version>.dmg <version> <build>
 ```
 
 The EdDSA private key is in the owner's login Keychain, account `stowkit` (`sign_update --account
-stowkit`). Never commit it or print it. The public key is in `Config/StowKitCloud-Info.plist`.
+stowkit`); the first use from a new `sign_update` binary raises a Keychain prompt only the owner can approve. Never commit it or print it. The public key is in `Config/StowKitCloud-Info.plist`.
 
 Sign the DMG before notarizing it. The notarytool keychain profile in use is named `AbleKit`.
 **Regenerate the `.sha256` sidecar after stapling** (`shasum -a 256 X.dmg > X.dmg.sha256`):
