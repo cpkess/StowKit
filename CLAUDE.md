@@ -170,8 +170,10 @@ both places. Don't "simplify" that away.
 
 1. **Household sharing acceptance** — two iCloud accounts, two Macs, against the checklist in
    `docs/ICLOUD_SETUP.md`. This is the blocking gate for calling iCloud ready.
-2. **Optimized storage** (brief §21) — cloud-only/optimized/offline states, pins, conservative
-   eviction, disk budget settings. Nothing is evicted today.
+2. **Optimized storage** (brief §21) — designed in `docs/STORAGE_ARCHITECTURE.md`, not built.
+   Nothing is evicted today. Sequence: disk accounting first (none exists), then pins plus
+   manual "Remove Download" (`OriginalState.pinned` already exists and is unused, so no
+   migration), then a V9 `lastAccessedAt` before any automatic policy.
 3. Cloud thumbnails; extractor-version negotiation.
 4. Push subscriptions / background sync (foreground-only today).
 5. Permanent deletion + real deletion reconciliation.
