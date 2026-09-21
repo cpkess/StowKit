@@ -11,14 +11,20 @@ struct ArchiveUsage: Sendable, Equatable {
     var database: Int64 = 0
     var staging: Int64 = 0
     var transfers: Int64 = 0
+    /// Archives opened from iCloud live in `CloudArchives/` beneath this root; they are separate
+    /// archives, so they are reported apart from this one rather than folded into "other".
+    var otherArchives: Int64 = 0
+    /// Fictional fixtures left by the live verification runner in `CloudValidation/`. On the
+    /// owner's Mac on 2026-09-21 this was 43 MB of a 53 MB total, all of it reported as "other".
+    var verificationData: Int64 = 0
     var other: Int64 = 0
     var unreadable = 0
 
     /// Interrupted imports and in-flight cloud transfers: transient working space.
     var inProgress: Int64 { staging + transfers }
-    var total: Int64 { originals + thumbnails + searchIndex + database + inProgress + other }
-    /// Everything that is not an original is derived, and regenerates or resyncs on demand.
-    var derived: Int64 { total - originals }
+    var total: Int64 { originals + thumbnails + searchIndex + database + inProgress + otherArchives + verificationData + other }
+    /// Regenerates or resyncs on demand, unlike originals, other archives, and test data.
+    var derived: Int64 { thumbnails + searchIndex + database + inProgress }
 }
 
 /// Where a document's original currently lives. Derived on demand from the filesystem and

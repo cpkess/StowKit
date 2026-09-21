@@ -20,6 +20,14 @@ struct ArchiveUsageView: View {
                 if usage.inProgress > 0 {
                     LabeledContent("In progress", value: bytes(usage.inProgress))
                 }
+                if usage.otherArchives > 0 {
+                    LabeledContent("Other iCloud archives", value: bytes(usage.otherArchives))
+                }
+                if usage.verificationData > 0 {
+                    LabeledContent("iCloud test data", value: bytes(usage.verificationData))
+                    Text("Fictional files left by developer iCloud verification runs. They are not your documents.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if usage.other > 0 {
                     LabeledContent("Other", value: bytes(usage.other))
                 }

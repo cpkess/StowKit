@@ -148,6 +148,8 @@ actor DocumentStorageManager {
             case "Search": usage.searchIndex += bytes
             case "Staging": usage.staging += bytes
             case "Transfers": usage.transfers += bytes
+            case "CloudArchives": usage.otherArchives += bytes
+            case "CloudValidation": usage.verificationData += bytes
             case let name? where name.hasPrefix("Library.store"): usage.database += bytes
             default: usage.other += bytes
             }

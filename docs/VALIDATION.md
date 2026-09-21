@@ -1,5 +1,39 @@
 # Validation
 
+## Disk accounting read off the real archive
+
+September 21, 2026: first reading of Settings → Measure Disk Use on the owner's populated archive,
+in the running app. It closed the step-1 gap "never read off a real archive", and it exposed a
+flaw that the tests had not:
+
+| Line | Reading |
+| --- | --- |
+| Disk used | 52.7 MB |
+| Originals | 537 KB, 7 files |
+| Database | 4.5 MB |
+| Search index | 2.2 MB |
+| Thumbnails | 53 KB |
+| Other | **45.5 MB** |
+
+86% of the archive folder was "Other". A temporary probe logging every file that fell into
+"Other" found 54 files, all under `CloudValidation/`: seven leftover isolated archives from the
+live verification runner (`CloudLiveVerification` writes to
+`DocumentStorageManager.defaultRoot/CloudValidation/<UUID>`), 43.4 MiB of fictional fixtures.
+Archives opened from iCloud share the same structure, beneath `CloudArchives/`. Neither belongs
+to the archive being measured.
+
+`ArchiveUsage` now reports `otherArchives` (`CloudArchives/`) and `verificationData`
+(`CloudValidation/`) on their own lines, and `derived` counts only data that regenerates.
+`testUsageReportsOtherArchivesAndVerificationDataSeparately` confirms that neither folder lands
+in "other", and that a nested archive's `Library.store` is not counted as this archive's
+database. Full suite: **103 tests, zero failures**. Re-measured on the real archive, Settings
+shows "iCloud test data 45.5 MB" with an explanatory caption, and no "Other" line.
+
+**Not established.** The total still has not been compared with `du`: the app's container is
+protected from this shell (`Operation not permitted`). The runner still writes inside the real
+archive's folder; moving it elsewhere is untested, so it has not been changed. The leftover test
+data has not been deleted — that is the owner's call.
+
 ## Launch freeze root cause: a VSplitView rebuild loop in StowKit
 
 September 21, 2026. **This corrects the entry below, which concluded the freeze was a transient

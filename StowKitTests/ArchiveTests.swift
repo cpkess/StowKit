@@ -325,6 +325,24 @@ import UniformTypeIdentifiers
         }
     }
 
+    func testUsageReportsOtherArchivesAndVerificationDataSeparately() async throws {
+        _ = try await importer.importFile(pdf("Usage Nested.pdf")).document
+        let before = try await storage.usage()
+        // Each nested folder is a whole separate archive with its own Library.store.
+        for (folder, size) in [("CloudArchives/account/\(UUID())", 70_000), ("CloudValidation/\(UUID())", 90_000)] {
+            let directory = root.appendingPathComponent(folder)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(repeating: 1, count: size).write(to: directory.appendingPathComponent("Library.store"))
+        }
+        let after = try await storage.usage()
+        XCTAssertGreaterThanOrEqual(after.otherArchives, 70_000)
+        XCTAssertGreaterThanOrEqual(after.verificationData, 90_000)
+        XCTAssertEqual(after.other, before.other, "neither folder may land in other")
+        XCTAssertEqual(after.database, before.database, "a nested archive's store is not this archive's database")
+        XCTAssertEqual(after.derived, before.derived)
+        XCTAssertEqual(after.total, after.originals + after.derived + after.otherArchives + after.verificationData + after.other)
+    }
+
     func testUsageCountsTrashedOriginalsThatStillOccupyDisk() async throws {
         var document = try await importer.importFile(pdf("Usage Trash.pdf")).document
         let before = try await storage.usage()
