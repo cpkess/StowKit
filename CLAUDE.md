@@ -175,7 +175,17 @@ both places. Don't "simplify" that away.
 - Confidence-based filing is a conservative heuristic, not a calibrated probability. Analysis
   reads at most 4,000 UTF-8 bytes from the first eight pages — do not describe it as
   whole-document understanding.
-- Trash is retained indefinitely; there is no permanent delete. Disk use grows without bound.
+- **Permanent deletion uses tombstones — never delete a `StowMetadata` record.** A tombstone keeps only
+  `id`, `contentHash`, and `deleted`; it stops a Mac that missed the deletion from recreating the
+  document. Content records are deleted only after iCloud accepts the tombstone. A deletion beats a
+  concurrent edit (mutation-tested: without that branch the document comes back). Verified against the
+  fake transport only, not across two live Macs.
+- **Switching archives must not call `pauseCloud()`** — that turns iCloud off for the archive being left.
+  Use `pauseCloudTransportForSwitch()`. The picker also hides this Mac's own iCloud zone, which would
+  otherwise open as a second local copy of the same archive.
+- The owner's Production iCloud holds three fictional archives from Codex's September smoke tests
+  (listed in the picker as "iCloud Archive" plus a short ID). They are not the owner's documents;
+  deleting those zones is the owner's call.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 
@@ -190,7 +200,8 @@ both places. Don't "simplify" that away.
    automatic policy) until manual eviction has been used on a real archive.
 3. Cloud thumbnails; extractor-version negotiation.
 4. Push subscriptions / background sync (foreground-only today).
-5. Permanent deletion + real deletion reconciliation.
+5. Tombstone-based permanent deletion is built; still missing are authoritative reconciliation after a
+   token reset, and live two-Mac verification.
 6. Not yet started from the brief: entities, related documents, reminders, semantic search,
    Spotlight, App Intents, Share Extension, iOS companion.
 

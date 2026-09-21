@@ -74,7 +74,7 @@ Record app commit, macOS/Xcode versions, signing team, container/environment, te
 - Exercise offline retries, retry-after/quota failures, and a lost save response. Confirm exact acknowledgments cannot clear newer edits and no error advances the incoming cursor past an unapplied page.
 - Reopen a populated older archive after migration; verify original hashes, Trash, protected empty metadata, OCR checkpoints, text, and search. Verify the default unconfigured build still works locally without a network entitlement.
 
-Do not call iCloud ready until these checks pass. Production rollout, a 50,000-document live CloudKit performance run, push delivery, cloud thumbnails, cache eviction/pinning UI, and permanent deletion are separate outstanding work. Locally retained originals currently consume disk space indefinitely.
+Do not call iCloud ready until these checks pass. Production rollout, a 50,000-document live CloudKit performance run, push delivery, and cloud thumbnails are separate outstanding work. Permanent deletion and manual eviction exist but have been verified only against the fake transport, not across two live Macs. Locally retained originals currently consume disk space indefinitely.
 
 ## Repeatable private-cloud smoke test
 

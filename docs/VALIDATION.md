@@ -1,5 +1,46 @@
 # Validation
 
+## Permanent deletion, archive picker, and iCloud-style downloads
+
+September 21, 2026, after 1.0.0. Full suite: **114 tests, zero failures** at the time of the
+feature commit. Nothing below is released yet.
+
+**Permanent deletion** (`ArchiveRepository+Deletion`). Five tests in `CloudArchiveTests`, run
+against the fake transport with two local stores:
+
+- Only documents in Trash can be deleted.
+- A deletion removes the local rows, the file, and the search entry.
+- The iCloud record becomes a tombstone with exactly `id`, `contentHash`, and `deleted`.
+- The original's content is deleted from iCloud, and the other store removes its downloaded copy.
+- A stale offline edit on another Mac cannot resurrect the document.
+- A concurrent edit that reaches iCloud first still loses to the deletion.
+- A local-only archive deletes without iCloud.
+
+The concurrent-edit test was mutation-checked. With the delete-wins conflict branch disabled,
+three assertions failed and the document reappeared with a cloud-derived ID — the resurrection
+bug the branch exists to prevent.
+
+**Archive picker.** Checked in the signed test build against the owner's Production iCloud. It
+listed On My Mac plus three iCloud archives and marked the current one. The current one was
+**a fictional test archive from Codex's September smoke tests**: the saved archive choice
+already pointed at it before this session, so it had been opened earlier from Settings →
+Find My iCloud Archives. Selecting a picker row by background click only dismissed the popover,
+a limitation of driving an inactive app. Through the new **File → Switch Archive** menu, the
+debug build switched from that test archive back to the owner's archive, which showed its own
+document. Switching no longer calls `pauseCloud()`, which had turned iCloud off for the archive
+being left.
+
+**Not established.**
+
+- Permanent deletion has not run against live CloudKit or between two physical Macs.
+- `deleteContent` and the change feed's tolerance of content-record deletions are exercised
+  only by the fake transport; the fake does not emit deletions.
+- The download badge and the Download Now / Remove Download menu items were compiled into the
+  signed build but not seen on screen, because context menus need full-screen control.
+- A popover row press was not observed working, only the equivalent menu command.
+- The owner's Delete Permanently and Empty Trash buttons were not pressed on real documents.
+- The leftover test archives remain in the owner's iCloud.
+
 ## 1.0.0 release build
 
 September 21, 2026: version 1.0.0, build 6, from `8ac44a1`, built with

@@ -31,6 +31,17 @@ struct StowKitApp: App {
                 Button("Search Current View") {
                     NotificationCenter.default.post(name: .stowKitSearch, object: nil)
                 }.keyboardShortcut("f")
+                Divider()
+                Menu("Switch Archive") {
+                    ForEach(library.archiveChoices) { choice in
+                        Toggle(choice.title, isOn: Binding(get: { choice.isCurrent }, set: { chosen in
+                            if chosen { Task { await library.switchArchive(to: choice) } }
+                        }))
+                    }
+                    Divider()
+                    Button("Find iCloud Archives") { Task { await library.findCloudArchives() } }
+                        .disabled(CloudSetup.containerID == nil)
+                }
             }
         }
         Settings {

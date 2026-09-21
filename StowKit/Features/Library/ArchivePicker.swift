@@ -34,7 +34,9 @@ struct ArchivePicker: View {
                             Spacer()
                             if choice.isCurrent { Image(systemName: "checkmark").foregroundStyle(.tint) }
                         }.padding(.vertical, 5).padding(.horizontal, 6).contentShape(Rectangle())
+                            .accessibilityElement(children: .combine)
                     }.buttonStyle(.plain).disabled(choice.isCurrent)
+                        .accessibilityLabel(choice.isCurrent ? "\(choice.title), current archive" : "Open \(choice.title)")
                 }
             }
             if library.cloudBusy { ProgressView("Looking for iCloud archives…").controlSize(.small) }

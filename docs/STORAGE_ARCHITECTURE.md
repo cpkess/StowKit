@@ -4,8 +4,8 @@ Design note for product brief §21–§22. Written before implementation, in the
 [the iCloud architecture note](ICLOUD_ARCHITECTURE.md): decide the model, then build against
 acceptance gates. Nothing described here is implemented yet.
 
-Today every original StowKit has ever held stays on every Mac forever. Trash is retained
-indefinitely with no permanent delete, and `CloudSyncCoordinator` never evicts. A synced
+When this note was written, every original StowKit had ever held stayed on every Mac forever:
+Trash had no permanent delete (added 2026-09-21), and `CloudSyncCoordinator` never evicts. A synced
 household archive therefore grows without bound on each member's disk, which is the opposite
 of the brief's promise that StowKit "intelligently manages local disk usage".
 
@@ -158,7 +158,6 @@ eviction of the last unverified copy:
 
 ## Out of scope
 
-Cloud thumbnails, eviction in shared archives this account does not own, permanent deletion
-and real deletion reconciliation, per-collection storage rules, and eviction enabled by
-default. Permanent deletion is the natural companion to this work — Trash is the largest
-unmanaged growth — but it destroys user data and deserves its own note.
+Cloud thumbnails, eviction in shared archives this account does not own, per-collection
+storage rules, and eviction enabled by default. Permanent deletion was built separately on
+2026-09-21 with tombstones; see `docs/ARCHITECTURE.md` and `docs/VALIDATION.md`.

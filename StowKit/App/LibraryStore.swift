@@ -99,6 +99,7 @@ final class LibraryStore {
             cloudReadOnly = !(try await transport.canWrite())
             try repository.bindCloud(binding)
             cloudEnabled = true; cloudHasError = false; cloudAccessSuspended = false
+            if isThisMacArchive { UserDefaults.standard.set(true, forKey: Self.thisMacSyncsKey) }
             await storage.setCloudTransport(transport)
             cloudCoordinator = CloudSyncCoordinator(repository: repository, storage: storage, reader: reader, transport: transport,
                 onStatus: { [weak self] status, failed in self?.cloudStatus = status; self?.cloudHasError = failed },
@@ -129,6 +130,7 @@ final class LibraryStore {
         await cloudCoordinator?.stop(); cloudCoordinator = nil
         await storage.setCloudTransport(nil)
         try? repository?.disableCloud(); cloudEnabled = false
+        if isThisMacArchive { UserDefaults.standard.set(false, forKey: Self.thisMacSyncsKey) }
     }
     func shutdownForSwitch() async {
         cloudTimer?.cancel(); searchTask?.cancel()
@@ -166,8 +168,9 @@ final class LibraryStore {
         }
         return choices
     }
+    static let thisMacSyncsKey = "StowKitThisMacArchiveSyncs"
     private func thisMacChoice(current: Bool) -> ArchiveChoice {
-        let syncing = current ? cloudEnabled : false
+        let syncing = current ? cloudEnabled : UserDefaults.standard.bool(forKey: Self.thisMacSyncsKey)
         return ArchiveChoice(id: "this-mac", kind: syncing ? .iCloud : .thisMac,
             title: syncing ? "My Archive" : "On My Mac",
             subtitle: syncing ? "In iCloud, with copies on this Mac" : "Stored on this Mac",

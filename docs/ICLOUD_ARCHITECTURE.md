@@ -87,7 +87,7 @@ The local content-hash check remains the first duplicate check. For cloud import
 
 An offline import is immediately usable locally, but household duplicate reconciliation waits for connectivity. A duplicate whose original is cloud-only must not be treated as a corrupt local archive simply because the file is absent. Verify the committed remote manifest; a newly imported matching file can supply a safe local copy. Never discard that copy based only on an unverified hash claim. Hashes are scoped to a household; there is no global cross-user deduplication service.
 
-Retain Trash indefinitely as today. A future permanent-delete action needs persistent tombstones to prevent an old offline device from resurrecting records. Do not implement fixed-age tombstone expiry, chunk garbage collection, or last-copy deletion in the first sync slice. Shared sync propagates deletions and is not an independent backup.
+Retain Trash indefinitely as today. A future permanent-delete action needs persistent tombstones to prevent an old offline device from resurrecting records. *(Implemented 2026-09-21 as described: tombstones never expire, and content records are deleted only after the tombstone is accepted.)* Do not implement fixed-age tombstone expiry, chunk garbage collection, or last-copy deletion in the first sync slice. Shared sync propagates deletions and is not an independent backup.
 
 ## Large files and transfer recovery
 
