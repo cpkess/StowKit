@@ -1,5 +1,20 @@
 # Validation
 
+## 1.2.0 release build
+
+September 21, 2026: version 1.2.0, build 8, from `1f45b12`, built with
+`scripts/build-distribution.sh`; all of its checks passed. Universal (`x86_64 arm64`), Production,
+and neither the live-verification nor the maintenance runner's strings are present. App
+notarization `512c4a62-d007-4877-abc8-fd6d58037e97` and DMG notarization
+`e4688a03-1c8d-4fa8-b9e8-58ebaeded5bf`, both Accepted; both stapled and accepted by Gatekeeper
+(`source=Notarized Developer ID`). DMG SHA-256, regenerated after stapling:
+`a247095ec3e37c275b01b399b1456c0ef6d27158fe34f59e970f24e3730d3ab3` (3,768,772 bytes). The image,
+mounted read-only, holds `StowKit.app` and an `Applications` link; the app passes
+`codesign --verify --deep --strict`, stapler validation, and `spctl`, and reports 1.2.0.
+
+**Not established.** This exact binary was not launched against the owner's archive; the identical
+source ran as the unnotarized test build recorded below. The limits in the release notes apply.
+
 ## Inbox folder from a phone, and overlapping list rows
 
 September 21, 2026, 1.2.0 (8) test build, owner's archive. The owner chose an iCloud Drive folder

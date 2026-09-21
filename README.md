@@ -73,12 +73,12 @@ See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud a
 
 ## Releases
 
-[v1.1.0](https://github.com/cpkess/StowKit/releases/tag/v1.1.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit. Read the [release notes](docs/releases/v1.1.0.md) first: permanent deletion is tested only against a simulated iCloud, and household sharing is experimental and untested across accounts. Earlier releases: [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
+[v1.2.0](https://github.com/cpkess/StowKit/releases/tag/v1.2.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit. Read the [release notes](docs/releases/v1.2.0.md) first: it has been tested on one Mac only, and household sharing is experimental and untested across accounts. Earlier releases: [v1.1.0](docs/releases/v1.1.0.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
 
 To package an already signed build without changing its signature:
 
 ```sh
-scripts/package-dmg.sh /path/to/StowKit.app 1.1.0 build/releases
+scripts/package-dmg.sh /path/to/StowKit.app 1.2.0 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.
