@@ -278,8 +278,9 @@ final class LibraryStore {
         Task {
             let location = await storage.originalLocation(for: document)
             let facts = try? repository.evictionFacts(id)
+            let manageable = cloudEnabled && !cloudReadOnly && !cloudAccessSuspended && facts?.sharedArchive == false
             storageState = DocumentStorageState(documentID: id, location: location,
-                                                pinned: facts?.pinned ?? false)
+                                                pinned: facts?.pinned ?? false, manageable: manageable)
         }
     }
     func moveToTrash(_ id: UUID) {

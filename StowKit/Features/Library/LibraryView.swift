@@ -153,7 +153,10 @@ struct LibraryView: View {
                     setPinned: { library.setPinned(document.id, $0) },
                     removeDownload: { library.removeDownload(document.id) })
                     .id(document.id)
-                    .task(id: document.id) { library.refreshStorageState(document.id) }
+                    // iCloud connects after launch; re-derive when it does so the controls appear.
+                    .task(id: "\(document.id)|\(library.cloudEnabled)|\(library.cloudReadOnly)|\(library.cloudAccessSuspended)") {
+                        library.refreshStorageState(document.id)
+                    }
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
             }

@@ -37,6 +37,9 @@ struct DocumentStorageState: Sendable, Equatable {
     let documentID: UUID
     let location: OriginalLocation
     let pinned: Bool
+    /// Whether this archive can hand originals back to iCloud at all: sync on, writable, not
+    /// suspended, and owned. When false the controls would only ever be refused, so they hide.
+    let manageable: Bool
 }
 
 /// Repository-owned facts that decide whether a local original may be removed.

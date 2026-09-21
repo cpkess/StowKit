@@ -26,19 +26,23 @@ struct StorageInspector: View {
     }
 
     var body: some View {
-        if let summary, let state {
+        // A local-only archive has nothing to hand back to iCloud, and the details grid already
+        // says the original is on this Mac, so show nothing rather than controls that always fail.
+        if let summary, let state, state.manageable || state.location != .availableOffline {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(spacing: 8) {
                     Image(systemName: summary.symbol).foregroundStyle(.secondary)
                     Text(summary.title).font(.subheadline.weight(.medium))
                     Spacer()
-                    if state.location == .availableOffline && !isTrashed {
+                    if state.manageable && state.location == .availableOffline && !isTrashed {
                         Button("Remove Download", action: removeDownload)
                     }
                 }
                 Text(summary.detail).font(.caption).foregroundStyle(.secondary)
-                Toggle("Keep Downloaded", isOn: Binding(get: { state.pinned }, set: setPinned))
-                    .toggleStyle(.checkbox).font(.caption).disabled(isTrashed)
+                if state.manageable {
+                    Toggle("Keep Downloaded", isOn: Binding(get: { state.pinned }, set: setPinned))
+                        .toggleStyle(.checkbox).font(.caption).disabled(isTrashed)
+                }
                 if let error {
                     Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 }
