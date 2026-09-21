@@ -37,14 +37,28 @@ enum UnderstandingPolicy {
         result.tags = Array(Set(result.tags.map { String($0.prefix(40)) }.filter { !$0.isEmpty })).sorted().prefix(8).map { $0 }
         let text = TextNormalization.searchKey(input.text)
         if !result.correspondent.isEmpty && !text.contains(TextNormalization.searchKey(result.correspondent)) { result.correspondent = "" }
-        let evidence = TextNormalization.searchKey(result.evidence).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !input.collections.contains(result.collection) || evidence.count < 5 || !text.contains(evidence) {
+        if !input.collections.contains(result.collection) || !evidenceSupported(result.evidence, by: input.text) {
             result.collection = ""; result.confidence = 0
         }
         if !result.confidence.isFinite { result.confidence = 0 }
         result.confidence = min(1, max(0, result.confidence))
         if input.truncated { result.confidence = min(result.confidence, 0.64); result.note = "Based on the first pages only. Check the rest before filing." }
         return result
+    }
+    /// The model backs its collection with a quote. Measured on the owner's documents
+    /// (2026-09-21), every quoted word was in the document, but the model reflows quotes: it
+    /// changes spacing and punctuation and joins words from separate lines, so an exact character
+    /// match rejected 3 of 4 correct collections. Words are compared instead: in order, or, for a
+    /// quote of three or more words, all present. A word the document lacks still fails it.
+    static func evidenceSupported(_ evidence: String, by text: String) -> Bool {
+        func words(_ value: String) -> [String] { TextNormalization.searchKey(value).split { !$0.isLetter && !$0.isNumber }.map(String.init) }
+        let quote = words(evidence)
+        guard !quote.isEmpty, quote.joined().count >= 5 else { return false }
+        let source = words(text)
+        guard source.count >= quote.count else { return false }
+        if (0...(source.count - quote.count)).contains(where: { source[$0..<($0 + quote.count)].elementsEqual(quote) }) { return true }
+        let present = Set(source)
+        return quote.count >= 3 && quote.allSatisfy(present.contains)
     }
     static func merge(_ result: DocumentUnderstanding, into document: HouseholdDocument, protected: Set<String>, explicit: Bool = false) -> HouseholdDocument {
         var edited = document

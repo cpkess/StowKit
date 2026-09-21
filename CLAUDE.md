@@ -185,6 +185,11 @@ both places. Don't "simplify" that away.
   plan because a dev build already opened V7. Don't prune migration versions.
 - A `#Predicate` over the frozen collection array crashed reproducibly; the fallback now
   filters bounded value snapshots instead. Don't reintroduce predicates over that array.
+- **Collection evidence is compared by words, not characters.** The model reflows its quotes
+  (spacing, punctuation, words joined across lines); an exact match rejected 3 of 4 correct
+  collections on the owner's documents. See `UnderstandingPolicy.evidenceSupported`.
+- **Check for a second running instance** (`pgrep -lf StowKit.app`) after quitting test builds:
+  `osascript quit` once stopped only one of two, leaving both on the same archive and iCloud.
 - Confidence-based filing is a conservative heuristic, not a calibrated probability. Analysis
   reads at most 4,000 UTF-8 bytes from the first eight pages — do not describe it as
   whole-document understanding.

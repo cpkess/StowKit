@@ -1,5 +1,43 @@
 # Validation
 
+## Why Apple Intelligence never assigned a collection, and an Inbox review flow (unreleased)
+
+September 21, 2026, signed test builds on the owner's archive. A temporary probe in
+`UnderstandingPolicy.validated` logged each collection decision while Suggest Again ran on four
+owner documents. The model chose sensible, allowed collections every time (Home, Taxes, Home,
+Receipts), and every word of every supporting quote was in the document (`tokenPresent=1.00`). Only
+the two-word quote matched the document character for character (`rawFound=1`); one other matched
+once spacing and punctuation were ignored, and two joined words from separate lines. The exact
+match therefore rejected 3 of 4 correct collections and set their confidence to 0, so nothing was
+filed. Separately, two of the three were over the 4,000-byte excerpt limit, whose deliberate 0.64
+cap keeps long documents below the 0.65 filing threshold; that rule is unchanged.
+
+Fix: `UnderstandingPolicy.evidenceSupported` compares words (case and accents folded): the quote's
+words in order, or, for three or more words, all of them present. A word the document lacks still
+fails it. Four `IntelligenceTests` built from the measured patterns pass; with the old exact check
+put back, the three reflow tests fail and the invented-word test still passes. (These four were
+first appended inside a private helper actor after the test class, where XCTest never ran them; the
+suite count, 19 instead of 23, exposed it.) On the owner's archive, Suggest Again on the property tax
+receipt then filed it in Taxes, "Fairly sure", with sender and tags, and it left Inbox. The model
+also replaced the filename title "June 2025 property tax receipt" with "Payment Confirmation": the
+filename title isn't protected.
+
+Inbox flow: while browsing Inbox, the details pane shows a review card: "Inbox · n of m", previous
+and next (⌘[ ⌘]), the suggestion with Use Suggestions & Next (⌘↩), a button per collection that files
+the document and marks it reviewed, and Mark Reviewed & Next (⌥⌘↩). Each decision opens the document
+that followed. Seen rendering on the owner's Inbox ("1 of 2", then "1 of 1"); a first version showed
+"1 of 5" for a moment on a non-Inbox document while the list still held the previous view, fixed by
+waiting for the reload. The accept and file buttons were not pressed on the owner's documents.
+
+During this run a probe build and the test build ran at once on the same archive: `osascript quit`
+stopped only one, and the probe had to be terminated. No damage was seen, but two instances share
+one database and one iCloud connection; check `pgrep -lf StowKit.app` after quitting.
+
+Full suite: 144 tests, 0 failures (the Vision `e5rt` failures are gone today).
+
+**Not established.** The review card's buttons were not exercised on real documents or in a UI
+test (XCTest's host renders no library view). Long documents still stay in Inbox for review by design.
+
 ## Sparkle updates end to end: 1.2.9 → published 1.3.0
 
 September 21, 2026, owner's Mac. From `2720ebd` in a temporary worktree, a signed Developer ID build

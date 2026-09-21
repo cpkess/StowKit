@@ -542,6 +542,38 @@ final class LibraryStore {
             if processingEnabled { intelligenceProcessor?.start() }
         } catch { errorMessage = error.localizedDescription }
     }
+    // MARK: Inbox review flow
+
+    /// Present only while browsing Inbox, where each decision removes the document from the list.
+    func inboxReview(for id: UUID) -> InboxReview? {
+        // While the list reloads it still holds the previous view's documents, so wait for it.
+        guard destination == .inbox, search.isEmpty, !isSearchingText,
+              let index = documents.firstIndex(where: { $0.id == id }) else { return nil }
+        let before = index > 0 ? documents[index - 1].id : nil
+        let after = index + 1 < documents.count ? documents[index + 1].id : nil
+        return InboxReview(position: index + 1, count: totalResults, analysis: analysis[id],
+            accept: { [weak self] in self?.decide(id) { self?.applyAnalysis(id) } },
+            file: { [weak self] name in self?.decide(id) {
+                guard var document = try? self?.repository?.document(id) else { return }
+                document.collections.insert(name); document.needsReview = false
+                self?.update(document)
+            } },
+            done: { [weak self] in self?.decide(id) {
+                guard var document = try? self?.repository?.document(id) else { return }
+                document.needsReview = false
+                self?.update(document)
+            } },
+            next: after.map { next in { [weak self] in self?.selection = next } },
+            previous: before.map { previous in { [weak self] in self?.selection = previous } })
+    }
+    /// Runs a decision, then opens the document that followed this one (or preceded it, at the end).
+    private func decide(_ id: UUID, _ action: () -> Void) {
+        guard let index = documents.firstIndex(where: { $0.id == id }) else { return action() }
+        let following = index + 1 < documents.count ? documents[index + 1].id : (index > 0 ? documents[index - 1].id : nil)
+        action()
+        selectedOverride = nil
+        selection = following
+    }
     func applyAnalysis(_ id: UUID) {
         guard allowCloudEdit() else { return }
         do { try repository?.acceptAnalysis(id); selectedOverride = try repository?.document(id); refreshTextSearch(resetLimit: false) }

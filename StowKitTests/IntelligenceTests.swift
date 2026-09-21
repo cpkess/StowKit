@@ -309,6 +309,35 @@ import FoundationModels
         context.insert(ArchiveSchemaV2.PageTextRecord(documentID: document.id, pageIndex: 0, page: .init(text: "Insurance policy. Policy number ABC123.", method: .embedded)))
         try context.save()
     }
+    // Patterns measured on the owner's documents, where an exact match rejected 3 of 4 collections.
+    func testEvidenceSurvivesReflowedSpacingAndPunctuation() {
+        let text = "PROPERTY TAX RECEIPT\nTreasurer's Office —\nParcel 12-345, June 2025"
+        XCTAssertTrue(UnderstandingPolicy.evidenceSupported("Property tax receipt Treasurer's office", by: text), "line break and case")
+        XCTAssertTrue(UnderstandingPolicy.evidenceSupported("parcel 12 345 june 2025", by: text), "punctuation")
+    }
+    func testEvidenceJoinedFromSeparateLinesPassesWhenEveryWordIsPresent() {
+        let text = "Kitchen fixtures\nProposal prepared by STARK Construction\nReplace ceiling fan in hallway"
+        XCTAssertTrue(UnderstandingPolicy.evidenceSupported("STARK Construction replace kitchen ceiling fan", by: text))
+    }
+    func testEvidenceWithAnInventedWordOrTooShortStillFails() {
+        let text = "Kitchen fixtures proposal prepared by STARK Construction"
+        XCTAssertFalse(UnderstandingPolicy.evidenceSupported("STARK Construction roofing proposal", by: text), "roofing isn't in the document")
+        XCTAssertFalse(UnderstandingPolicy.evidenceSupported("proposal kitchen", by: text), "two words out of order are too weak")
+        XCTAssertTrue(UnderstandingPolicy.evidenceSupported("fixtures proposal", by: text), "two words in order are a real quote")
+        XCTAssertFalse(UnderstandingPolicy.evidenceSupported("abc", by: "abc"), "too short to support anything")
+        XCTAssertFalse(UnderstandingPolicy.evidenceSupported("", by: text))
+    }
+    func testReflowedEvidenceKeepsTheCollectionThroughValidation() {
+        let date = Date()
+        let document = HouseholdDocument(id: UUID(), archiveID: UUID(), title: "scan", originalFilename: "scan.pdf", documentDate: date,
+            importedAt: date, modifiedAt: date, contentType: "com.adobe.pdf", contentHash: String(repeating: "a", count: 64), fileSize: 1,
+            relativePath: "Originals/aa/scan.pdf")
+        let input = UnderstandingInput(document: document, text: "PROPERTY TAX RECEIPT\nTreasurer's Office\nParcel 12-345",
+                                       collections: ["Taxes", "Home"], truncated: false)
+        let result = UnderstandingPolicy.validated(DocumentUnderstanding(collection: "Taxes", evidence: "Property tax receipt, Treasurer's office", confidence: 0.7), input: input)
+        XCTAssertEqual(result.collection, "Taxes")
+        XCTAssertEqual(result.confidence, 0.7)
+    }
 }
 
 private actor GatedUnderstandingProvider: DocumentIntelligenceProvider {
@@ -339,4 +368,5 @@ private actor SleepingUnderstandingProvider: DocumentIntelligenceProvider {
         try await Task.sleep(for: .seconds(30))
         return try await RuleBasedProvider().understand(input)
     }
+
 }

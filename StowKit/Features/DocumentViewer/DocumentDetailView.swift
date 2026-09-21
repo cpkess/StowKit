@@ -19,6 +19,7 @@ struct DocumentDetailView: View {
     let setPinned: (Bool) -> Void
     let removeDownload: () -> Void
     let deletePermanently: () -> Void
+    var review: InboxReview? = nil
     @State private var showDetails = true
     @State private var showMore = false
     @State private var quickLookURL: URL?
@@ -51,6 +52,8 @@ struct DocumentDetailView: View {
                                         Button("Restore", action: trashOrRestore)
                                     }
                                 }
+                            } else if let review {
+                                InboxReviewCard(review: review, collections: collections)
                             } else if document.needsReview {
                                 banner(symbol: "circle.fill", tint: .orange, title: "Needs review",
                                        detail: "Check the title, date, and collection, then mark it reviewed.") {
