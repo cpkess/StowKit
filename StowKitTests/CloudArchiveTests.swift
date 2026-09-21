@@ -65,6 +65,29 @@ import SQLite3
         XCTAssertEqual(try Data(contentsOf: local), Data("Fictional original bytes for sync integration".utf8))
         XCTAssertEqual(try b.collections().count, 12)
     }
+    func testSecondMacProcessesADocumentThatArrivedUnprocessed() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A", text: "Fictional patient authorization form")
+        let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()
+        let (ca, _, _) = try await coordinator(a, name: "A", server: server); await sync(ca)
+        let (cb, _, _) = try await coordinator(b, name: "B", server: server); await sync(cb)
+        let received = try XCTUnwrap(b.matching(hash: doc.contentHash))
+        XCTAssertEqual(try b.analysis(received.id)?.state, "remote")
+        XCTAssertEqual(try b.queueUnprocessedRemoteAnalyses(), 0, "The Mac that added it gets a grace period")
+        XCTAssertEqual(try b.queueUnprocessedRemoteAnalyses(now: Date().addingTimeInterval(601)), 1)
+        XCTAssertEqual(try b.analysis(received.id)?.state, "queued")
+    }
+    func testSecondMacLeavesAnUnderstoodDocumentAlone() async throws {
+        let a = try archive("A"), doc = try seed(a, name: "A", text: "Fictional patient authorization form")
+        var understood = try XCTUnwrap(a.document(doc.id)); understood.summary = "A fictional authorization form."
+        try a.update(understood)
+        let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()
+        let (ca, _, _) = try await coordinator(a, name: "A", server: server); await sync(ca)
+        let (cb, _, _) = try await coordinator(b, name: "B", server: server); await sync(cb)
+        let received = try XCTUnwrap(b.matching(hash: doc.contentHash))
+        XCTAssertEqual(received.summary, "A fictional authorization form.")
+        XCTAssertEqual(try b.queueUnprocessedRemoteAnalyses(now: Date().addingTimeInterval(601)), 0)
+        XCTAssertEqual(try b.analysis(received.id)?.state, "remote")
+    }
     func testRemoteMetadataEditDoesNotFetchOriginal() async throws {
         let a = try archive("A"), doc = try seed(a, name: "A")
         let b = try archive("B", joining: a.archiveID), server = FakeArchiveCloud()

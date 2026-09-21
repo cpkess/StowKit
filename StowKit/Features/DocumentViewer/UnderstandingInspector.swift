@@ -13,7 +13,7 @@ struct UnderstandingInspector: View {
                 Text(label).font(.subheadline.weight(.medium))
                 Spacer()
                 if snapshot?.result != nil { Button("Review Suggestions") { showSuggestions = true } }
-                if snapshot?.state == "complete" || snapshot?.state == "failed" {
+                if ["complete", "failed", "remote"].contains(snapshot?.state) {
                     Button("Suggest Again", action: retry).disabled(isTrashed)
                 }
             }
@@ -60,6 +60,7 @@ struct UnderstandingInspector: View {
         case "failed": "Couldn't make suggestions"
         case "paused": "Suggestions paused in Trash"
         case "queued": "Waiting to make suggestions"
+        case "remote": "Details came from iCloud"
         default: "Suggestions come after the text is read"
         }
     }

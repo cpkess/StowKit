@@ -106,7 +106,7 @@ final class LibraryStore {
             await storage.setCloudTransport(transport)
             cloudCoordinator = CloudSyncCoordinator(repository: repository, storage: storage, reader: reader, transport: transport,
                 onStatus: { [weak self] status, failed in self?.cloudStatus = status; self?.cloudHasError = failed },
-                onUpdate: { [weak self] in self?.refreshCloudState() }, onAccess: { [weak self] writable in self?.cloudReadOnly = !writable },
+                onUpdate: { [weak self] in self?.refreshCloudState(); self?.processUnprocessedRemote() }, onAccess: { [weak self] writable in self?.cloudReadOnly = !writable },
                 onSuspended: { [weak self] in self?.cloudAccessSuspended = binding.shared; self?.cloudTimer?.cancel() })
             cloudCoordinator?.schedule()
             cloudTimer?.cancel()
@@ -114,6 +114,7 @@ final class LibraryStore {
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(60)) } catch { break }
                     self?.cloudCoordinator?.schedule()
+                    self?.processUnprocessedRemote()
                 }
             }
             if accountObserver == nil {
@@ -276,7 +277,9 @@ final class LibraryStore {
             if let binding = try repository.cloudBinding(), binding.0.shared { cloudAccessSuspended = true; cloudReadOnly = true }
             if isThisMacArchive { ArchiveCopies.retire(duplicatesOf: repository, under: storage.root) }
             await resolveArchive()
-            if processingEnabled && !cloudReadOnly && !cloudAccessSuspended { processor?.start(); intelligenceProcessor?.start() }
+            if processingEnabled && !cloudReadOnly && !cloudAccessSuspended {
+                processor?.start(); processUnprocessedRemote(); intelligenceProcessor?.start()
+            }
         } catch { startupError = error.localizedDescription }
     }
 
@@ -447,6 +450,14 @@ final class LibraryStore {
             refreshTextSearch()
             if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
         } catch { errorMessage = error.localizedDescription }
+    }
+    /// This Mac is an edge processor for the one archive: it also makes suggestions for
+    /// documents that arrived from iCloud without any. See `queueUnprocessedRemoteAnalyses`.
+    private func processUnprocessedRemote() {
+        guard processingEnabled, !cloudReadOnly, !cloudAccessSuspended,
+              let queued = try? repository?.queueUnprocessedRemoteAnalyses(), queued > 0 else { return }
+        refreshProcessingOverview()
+        intelligenceProcessor?.start()
     }
     private func analysisDidUpdate(_ id: UUID) {
         syncNow()

@@ -193,6 +193,10 @@ both places. Don't "simplify" that away.
   zones from Codex's September smoke tests (`462F692A-…`, `72CAADA2-…`) were deleted
   on 2026-09-21 by `ArchiveMaintenance` (see `docs/ICLOUD_SETUP.md`); only the owner's zone remains. Never pick zones by a short name: the
   1.1.0 picker listed the owner's archive as "iCloud Archive 4017".
+- **Adding a synced document field breaks older Macs.** `validateIncoming` rejects any field one side
+  lacks (both directions), and a different `formatVersion` is rejected too. Prefer deriving facts
+  from existing fields (as `carriesOnlyImportDetails` does); if a field is unavoidable, it needs a
+  compatibility plan and a note that every Mac must update.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 
@@ -201,8 +205,8 @@ both places. Don't "simplify" that away.
 **Direction (owner, 2026-09-21):** replace paperless-ngx. iCloud holds the one archive; the Mac
 uploads, reviews and searches, and acts as an edge processor for files a phone drops into an inbox.
 Phone input: an iCloud Drive "StowKit Inbox" folder first, an iOS companion later. Build order:
-(a) one archive — done, see VALIDATION; (b) processing claims, so exactly one Mac reads and suggests
-for each document, including documents that arrived from iCloud unprocessed; (c) the iCloud Drive
+(a) one archive — done, see VALIDATION; (b) documents from iCloud that were never understood get suggestions on
+the Mac that has their text — done, grace-period rule, no claims yet; (c) the iCloud Drive
 inbox; (d) paperless parity (matching rules, saved views, custom fields, bulk edit, export).
 
 Earlier list, roughly in the order Codex intended:

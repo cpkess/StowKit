@@ -61,6 +61,29 @@ extension ArchiveRepository {
             try save()
         } catch { context.rollback(); throw error }
     }
+    /// A document from iCloud is normally understood by the Mac that added it, and the
+    /// suggestions arrive as metadata. One still carrying only what import set, with its text
+    /// here for longer than `grace`, never was (that Mac had no model, quit, or predates this),
+    /// so this Mac does it. Two Macs doing so converge: automatic fields merge deterministically.
+    @discardableResult
+    func queueUnprocessedRemoteAnalyses(now: Date = Date(), grace: TimeInterval = 600) throws -> Int {
+        let remote = "remote"
+        var queued = 0
+        for analysis in try context.fetch(FetchDescriptor<Analysis>(predicate: #Predicate { $0.state == remote })) {
+            guard let document = try document(analysis.documentID), document.trashedAt == nil,
+                  let job = try processingJob(document.id), job.state == "complete", job.updatedAt <= now.addingTimeInterval(-grace),
+                  Self.carriesOnlyImportDetails(document) else { continue }
+            analysis.state = "queued"; analysis.revision += 1; analysis.error = nil
+            queued += 1
+        }
+        if queued > 0 { try save() }
+        return queued
+    }
+    nonisolated static func carriesOnlyImportDetails(_ document: HouseholdDocument) -> Bool {
+        let raw = URL(fileURLWithPath: document.originalFilename).deletingPathExtension().lastPathComponent
+        return document.summary.isEmpty && document.correspondent.isEmpty && document.tags.isEmpty && document.collections.isEmpty
+            && [document.originalFilename, raw, FilenameMetadata(filename: document.originalFilename).title].contains(document.title)
+    }
     func queueAnalysis(_ id: UUID, reset: Bool = false) throws {
         let record: Analysis
         if let existing = try analysis(id) { record = existing }

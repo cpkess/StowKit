@@ -1,5 +1,27 @@
 # Validation
 
+## Documents from iCloud get suggestions on this Mac (unreleased)
+
+September 21, 2026, after `3a240ff`. A document that arrives from iCloud is given the analysis state
+`remote`, which nothing advanced, so a document its importing Mac never understood (no model, quit
+first, or imported by an older build) never got suggestions anywhere. Now
+`queueUnprocessedRemoteAnalyses` queues such a document when its text is on this Mac, it still
+carries only what import set (no summary, sender, tags, or collections, and a filename title), and
+the text has been here for 10 minutes, the importing Mac's grace period. The inspector labels
+`remote` as "Details came from iCloud" and offers Suggest Again.
+
+No new synced field: `validateIncoming` rejects a field either side lacks, so a marker would stall
+sync on 1.1.0 Macs. If two Macs do process one document, automatic fields merge through
+`SyncMergePolicy.preferred` without a conflict.
+
+`CloudArchiveTests`, 24 tests including two new ones, pass against the fake transport: an unprocessed
+document from a second archive stays alone inside the grace period and is queued after it; one
+whose importing Mac set a summary is left alone.
+
+**Not established.** No live two-Mac run. The worker completing a queued remote document was read
+from code (it uses saved text only), not run in a test, because tests use no model provider.
+Whether two Macs both processing one document produces a mixed set of fields was not tested.
+
 ## One archive in iCloud (unreleased)
 
 September 21, 2026, on `main` after `770fdef`. The owner found StowKit open on a second local copy
