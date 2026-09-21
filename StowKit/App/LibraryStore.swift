@@ -76,6 +76,9 @@ final class LibraryStore {
     @ObservationIgnored private var repository: ArchiveRepository?
     @ObservationIgnored private var importer: DocumentImporter?
     @ObservationIgnored private var pendingURLs: [URL] = []
+    @ObservationIgnored private var inboxFolder: InboxFolder?
+    private(set) var inboxFolderURL: URL?
+    private(set) var inboxFolderStatus = ""
 
     init(root: URL = DocumentStorageManager.defaultRoot, processingEnabled: Bool = true) {
         self.processingEnabled = processingEnabled
@@ -146,6 +149,7 @@ final class LibraryStore {
     func shutdownForSwitch() async {
         cloudTimer?.cancel(); searchTask?.cancel()
         await cloudCoordinator?.stop(); await processor?.stop(); await intelligenceProcessor?.stop()
+        inboxFolder?.stop()
         if let accountObserver { NotificationCenter.default.removeObserver(accountObserver); self.accountObserver = nil }
     }
     func syncNow() { cloudCoordinator?.schedule() }
@@ -181,6 +185,32 @@ final class LibraryStore {
             let root = try CloudSetup.prepareArchive(binding)
             NotificationCenter.default.post(name: .stowKitSwitchArchive, object: root)
         } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
+    }
+
+    // MARK: Inbox folder
+
+    func chooseInboxFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
+        panel.prompt = "Use as Inbox Folder"
+        panel.message = "Choose a folder, ideally in iCloud Drive. StowKit imports documents added to it and moves them to the Trash."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        do { try inboxFolder?.use(folder) } catch { errorMessage = "StowKit can’t use that folder.\n\n\(error.localizedDescription)" }
+        refreshInboxFolderState()
+    }
+    func stopUsingInboxFolder() { inboxFolder?.stopUsing() }
+    func checkInboxFolder() { Task { await inboxFolder?.scan() } }
+    private func refreshInboxFolderState() {
+        inboxFolderURL = inboxFolder?.url; inboxFolderStatus = inboxFolder?.status ?? ""
+    }
+    /// Background imports update the lists but never move the owner's selection or view.
+    private func inboxDidImport(_ result: ImportResult) {
+        guard !result.isDuplicate else { return }
+        if let snapshot = try? repository?.processingJob(result.document.id)?.snapshot { processing[result.document.id] = snapshot }
+        if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
+        refreshProcessingOverview()
+        refreshTextSearch(resetLimit: false)
+        syncNow()
     }
 
     // MARK: Local copies (iCloud Drive–style)
@@ -280,6 +310,10 @@ final class LibraryStore {
             if processingEnabled && !cloudReadOnly && !cloudAccessSuspended {
                 processor?.start(); processUnprocessedRemote(); intelligenceProcessor?.start()
             }
+            inboxFolder = InboxFolder(importer: importer, onImported: { [weak self] in self?.inboxDidImport($0) },
+                                      onChange: { [weak self] in self?.refreshInboxFolderState() })
+            refreshInboxFolderState()
+            if processingEnabled && !cloudReadOnly && !cloudAccessSuspended { inboxFolder?.start() }
         } catch { startupError = error.localizedDescription }
     }
 

@@ -1,5 +1,29 @@
 # Validation
 
+## Inbox folder, for adding documents from a phone (unreleased)
+
+September 21, 2026, after `3eb2556`. Settings → Inbox Folder takes a folder, remembered with a
+security-scoped bookmark. Every 30 seconds, and on Check Now, StowKit imports the supported
+documents directly inside it through the normal importer, then moves each one to the Trash once
+the import (or an identical document already in the archive) is confirmed. Hidden files and
+subfolders are ignored. An iCloud Drive file not yet on this Mac is asked to download and taken on
+a later pass. A file that fails stays in the folder and isn't retried until it changes. Background
+imports update the lists without moving the owner's selection. Entitlements: user-selected files are
+now read-write (to trash taken files), and both builds carry `files.bookmarks.app-scope`; the
+default build gained `Config/StowKit.entitlements` for that, and `codesign -d --entitlements` on the
+Debug app shows both.
+
+`InboxFolderTests`, 4 tests, pass in the sandboxed test host: candidate filtering; import then
+trash, with identical bytes counted once and still removed from the folder; an empty file left in
+place with a status saying so; the bookmark surviving a new `InboxFolder` and cleared by Stop Using
+Folder. Full suite: 130 tests, 6 failures, all the Vision OCR tests in `ProcessingTests` with the
+same `e5rt` error as the previous entry.
+
+**Not established.** No real iCloud Drive folder or iPhone was used: the tests' folder is inside the
+app's container, so neither the bookmark to a user-chosen folder across a real relaunch nor the
+iCloud download path ran. Two Macs watching one folder may both import a file; the identical
+imports converge on one iCloud record by design, but that was not run.
+
 ## Documents from iCloud get suggestions on this Mac (unreleased)
 
 September 21, 2026, after `3a240ff`. A document that arrives from iCloud is given the analysis state

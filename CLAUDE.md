@@ -207,7 +207,7 @@ uploads, reviews and searches, and acts as an edge processor for files a phone d
 Phone input: an iCloud Drive "StowKit Inbox" folder first, an iOS companion later. Build order:
 (a) one archive — done, see VALIDATION; (b) documents from iCloud that were never understood get suggestions on
 the Mac that has their text — done, grace-period rule, no claims yet; (c) the iCloud Drive
-inbox; (d) paperless parity (matching rules, saved views, custom fields, bulk edit, export).
+inbox — done (`InboxFolder`, Settings → Inbox Folder); (d) paperless parity (matching rules, saved views, custom fields, bulk edit, export).
 
 Earlier list, roughly in the order Codex intended:
 

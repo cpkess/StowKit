@@ -50,8 +50,9 @@ struct StowKitApp: App {
                     Text("Archive location").font(.caption).foregroundStyle(.secondary)
                     Text(library.storage.root.path).font(.caption).textSelection(.enabled)
                 }
+                InboxFolderSettingsView(library: library)
                 CloudSettingsView(library: library)
-            }.formStyle(.grouped).frame(width: 600, height: 650)
+            }.formStyle(.grouped).frame(width: 600, height: 720)
         }
     }
 }
