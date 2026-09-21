@@ -1,5 +1,37 @@
 # Validation
 
+## Sparkle updater, and a test that erased the owner's inbox folder (unreleased)
+
+September 21, 2026, 1.3.0 (9) signed test builds on the owner's Mac.
+
+**Updater.** Sparkle 2.10.0 through Swift Package Manager: the owner's choice on 2026-09-21, and
+StowKit's first dependency. Only signed builds carry `SUFeedURL`
+(`https://github.com/cpkess/StowKit/releases/latest/download/appcast.xml`), `SUPublicEDKey`, and
+`SUEnableInstallerLauncherService` (`Config/StowKitCloud-Info.plist`), plus the `-spks`/`-spki`
+mach-lookup exceptions Sparkle's sandboxed installer needs. The ad-hoc default build has no feed,
+so it never updates itself. The EdDSA key is StowKit's own, in the owner's login Keychain under
+account `stowkit`, separate from an existing Sparkle key found there. `scripts/make-appcast.sh`
+signs a stapled DMG and writes `appcast.xml`; `build-distribution.sh` now also refuses a build
+without the feed or key, or whose Sparkle framework isn't signed by the team.
+
+The first signed build **crashed at launch**: `dyld: Library not loaded:
+@rpath/Sparkle.framework`, because the hand-written project had no `LD_RUNPATH_SEARCH_PATHS`. With
+`@executable_path/../Frameworks` added, the rebuilt app launched on the owner's archive, its menu
+showed "Check for Updates…", and Settings has an Updates section and a Rules tab.
+
+**Test isolation bug.** On that launch the Inbox Folder setting was empty. A signed probe build
+logged `no bookmark stored`: `InboxFolderTests` removed `StowKitInboxFolderBookmark` from
+`UserDefaults.standard` in setUp and tearDown, and the hosted tests share the app's container, so
+every test run since the owner chose the folder had erased it. No files were affected: the
+`LibraryStore`s the tests create run with processing off and never started the folder. Fixed:
+`InboxFolder` takes its defaults, the tests use a throwaway suite, a processing-off store never
+creates an inbox folder, and `testTheOwnersRealFolderSettingIsNeverTouched` checks the real key is
+unchanged. Full suite: 140 tests, the same 6 Vision failures.
+
+**Not established.** No update has been downloaded or installed: no release carries an
+`appcast.xml` yet, so the feed currently returns 404. The end-to-end test needs 1.3.0 published,
+then an older build updating to it. The owner has to choose the inbox folder again.
+
 ## Filing rules (unreleased)
 
 September 21, 2026, after `08e00df`. Settings → Rules: owner-written rules in the style of

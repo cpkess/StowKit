@@ -4,14 +4,18 @@ import CoreGraphics
 
 @MainActor final class InboxFolderTests: XCTestCase {
     private var base: URL!
+    private var suite: String!
+    private var defaults: UserDefaults!
     private var inbox: URL { base.appendingPathComponent("Inbox") }
     override func setUp() async throws {
         base = FileManager.default.temporaryDirectory.appendingPathComponent("StowKitInboxFolder-\(UUID())")
         try FileManager.default.createDirectory(at: base.appendingPathComponent("Inbox"), withIntermediateDirectories: true)
-        UserDefaults.standard.removeObject(forKey: InboxFolder.bookmarkKey)
+        // Never UserDefaults.standard: the test host shares the app's container and settings.
+        suite = "StowKitInboxFolderTests-\(UUID())"
+        defaults = UserDefaults(suiteName: suite)
     }
     override func tearDown() async throws {
-        UserDefaults.standard.removeObject(forKey: InboxFolder.bookmarkKey)
+        defaults.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: base)
     }
     @discardableResult
@@ -30,7 +34,7 @@ import CoreGraphics
         try await storage.prepare()
         let repository = try ArchiveRepository(root: root)
         var results: [ImportResult] = []
-        let folder = InboxFolder(importer: DocumentImporter(repository: repository, storage: storage),
+        let folder = InboxFolder(importer: DocumentImporter(repository: repository, storage: storage), defaults: defaults,
                                  onImported: { results.append($0) }, onChange: {})
         return (folder, repository, results)
     }
@@ -68,6 +72,16 @@ import CoreGraphics
         XCTAssertEqual(try repository.documentCount(), 0)
         XCTAssertTrue(FileManager.default.fileExists(atPath: empty.path), "A failed file stays for the owner")
         XCTAssertTrue(folder.status.contains("couldn’t be imported"), folder.status)
+    }
+    func testTheOwnersRealFolderSettingIsNeverTouched() async throws {
+        let sentinel = Data("owner's bookmark".utf8)
+        let saved = UserDefaults.standard.data(forKey: InboxFolder.bookmarkKey)
+        defer { if let saved { UserDefaults.standard.set(saved, forKey: InboxFolder.bookmarkKey) } else { UserDefaults.standard.removeObject(forKey: InboxFolder.bookmarkKey) } }
+        if saved == nil { UserDefaults.standard.set(sentinel, forKey: InboxFolder.bookmarkKey) }
+        let expected = UserDefaults.standard.data(forKey: InboxFolder.bookmarkKey)
+        let (folder, _, _) = try await folder()
+        try folder.use(inbox); folder.stop(); folder.stopUsing()
+        XCTAssertEqual(UserDefaults.standard.data(forKey: InboxFolder.bookmarkKey), expected)
     }
     func testFolderIsRememberedAcrossLaunches() async throws {
         let (first, _, _) = try await folder()

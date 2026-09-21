@@ -8,6 +8,9 @@ import UniformTypeIdentifiers
     static let bookmarkKey = "StowKitInboxFolderBookmark"
     private(set) var url: URL?
     private(set) var status = ""
+    /// Injected so tests never read or erase the owner's real folder: the hosted test runner
+    /// shares the app's container, and therefore its standard defaults.
+    private let defaults: UserDefaults
     private let importer: DocumentImporter
     private let onImported: (ImportResult) -> Void
     private let onChange: () -> Void
@@ -17,22 +20,23 @@ import UniformTypeIdentifiers
     /// but a replaced one is.
     private var failed: [String: Date] = [:]
 
-    init(importer: DocumentImporter, onImported: @escaping (ImportResult) -> Void, onChange: @escaping () -> Void) {
-        self.importer = importer; self.onImported = onImported; self.onChange = onChange
-        url = Self.resolveBookmark()
+    init(importer: DocumentImporter, defaults: UserDefaults = .standard,
+         onImported: @escaping (ImportResult) -> Void, onChange: @escaping () -> Void) {
+        self.importer = importer; self.defaults = defaults; self.onImported = onImported; self.onChange = onChange
+        url = resolveBookmark()
     }
 
     func use(_ folder: URL) throws {
         let scoped = folder.startAccessingSecurityScopedResource()
         defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
         let bookmark = try folder.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-        UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
+        defaults.set(bookmark, forKey: Self.bookmarkKey)
         url = folder; failed = [:]; status = "Watching \(folder.lastPathComponent)"
         start()
     }
     func stopUsing() {
         loop?.cancel(); loop = nil
-        UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
+        defaults.removeObject(forKey: Self.bookmarkKey)
         url = nil; status = ""; onChange()
     }
     func start() {
@@ -97,12 +101,12 @@ import UniformTypeIdentifiers
         guard values?.isUbiquitousItem == true else { return true }
         return values?.ubiquitousItemDownloadingStatus == .current
     }
-    private static func resolveBookmark() -> URL? {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return nil }
+    private func resolveBookmark() -> URL? {
+        guard let data = defaults.data(forKey: Self.bookmarkKey) else { return nil }
         var stale = false
         guard let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &stale) else { return nil }
         if stale, let fresh = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
-            UserDefaults.standard.set(fresh, forKey: bookmarkKey)
+            defaults.set(fresh, forKey: Self.bookmarkKey)
         }
         return url
     }

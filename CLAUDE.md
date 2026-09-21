@@ -1,7 +1,7 @@
 # StowKit — working notes for Claude Code
 
 Native, local-first macOS household document archive. Swift 5 / SwiftUI / SwiftData,
-**zero package dependencies**, ~6,600 lines. Built entirely by Codex through Milestone 6;
+one package dependency (Sparkle, the owner's choice for automatic updates, 2026-09-21). Built entirely by Codex through Milestone 6;
 Claude Code took over on 2026-09-20.
 
 Product north star: `docs/PRODUCT_BRIEF.md` (the owner's original spec — what StowKit is
@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.2.0, build 8 (released 2026-09-21). The app icon is
+- Deployment target macOS 14.0. Current version 1.3.0, build 9 (unreleased). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
@@ -67,7 +67,8 @@ than growing. Match that when adding code.
   *cleared*) are protected from AI suggestions and from remote overwrite.
 - Comments explain *why*, not *what*, and are rare. Dense, idiomatic Swift. No custom design
   system — Apple system typography, materials, sidebar/toolbar conventions.
-- Prefer native Apple frameworks; add a dependency only for a real capability gap. So far: none.
+- Prefer native Apple frameworks; add a dependency only for a real capability gap. So far: Sparkle 2
+  (a sandboxed app cannot replace itself in /Applications without its installer service).
 
 ## Documentation discipline — the most important convention
 
@@ -129,6 +130,17 @@ scripts/notarize.sh /path/to/StowKit.app <keychain-profile>
 scripts/package-dmg.sh /path/to/StowKit.app <version> build/releases
 scripts/notarize.sh build/releases/StowKit-<version>.dmg <keychain-profile>
 ```
+
+Then write and sign the Sparkle appcast, and attach it to the GitHub release **as `appcast.xml`**
+alongside the DMG and checksum: the app's feed is `releases/latest/download/appcast.xml`, so a
+release without one breaks updates for everyone.
+
+```bash
+scripts/make-appcast.sh build/releases/StowKit-<version>.dmg <version> <build>
+```
+
+The EdDSA private key is in the owner's login Keychain, account `stowkit` (`sign_update --account
+stowkit`). Never commit it or print it. The public key is in `Config/StowKitCloud-Info.plist`.
 
 Sign the DMG before notarizing it. The notarytool keychain profile in use is named `AbleKit`.
 **Regenerate the `.sha256` sidecar after stapling** (`shasum -a 256 X.dmg > X.dmg.sha256`):
@@ -198,6 +210,12 @@ both places. Don't "simplify" that away.
   lacks (both directions), and a different `formatVersion` is rejected too. Prefer deriving facts
   from existing fields (as `carriesOnlyImportDetails` does); if a field is unavoidable, it needs a
   compatibility plan and a note that every Mac must update.
+- **Tests share the app's settings.** The hosted test runner uses the app's own container, so
+  `UserDefaults.standard` in a test is the owner's real settings: `InboxFolderTests` once erased the
+  owner's inbox folder that way. Inject a throwaway `UserDefaults(suiteName:)` instead.
+- **The project file is hand-written.** Settings Xcode templates add by default can be missing:
+  `LD_RUNPATH_SEARCH_PATHS` was, and the first Sparkle build crashed at launch. Launch the signed
+  build before calling anything done.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 

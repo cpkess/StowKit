@@ -337,10 +337,13 @@ final class LibraryStore {
             if processingEnabled && !cloudReadOnly && !cloudAccessSuspended {
                 processor?.start(); processUnprocessedRemote(); intelligenceProcessor?.start()
             }
-            inboxFolder = InboxFolder(importer: importer, onImported: { [weak self] in self?.inboxDidImport($0) },
-                                      onChange: { [weak self] in self?.refreshInboxFolderState() })
-            refreshInboxFolderState()
-            if processingEnabled && !cloudReadOnly && !cloudAccessSuspended { inboxFolder?.start() }
+            // Test stores run with processing off and must never see the owner's inbox folder.
+            if processingEnabled {
+                inboxFolder = InboxFolder(importer: importer, onImported: { [weak self] in self?.inboxDidImport($0) },
+                                          onChange: { [weak self] in self?.refreshInboxFolderState() })
+                refreshInboxFolderState()
+                if !cloudReadOnly && !cloudAccessSuspended { inboxFolder?.start() }
+            }
         } catch { startupError = error.localizedDescription }
     }
 

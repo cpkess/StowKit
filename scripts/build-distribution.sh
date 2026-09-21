@@ -64,5 +64,9 @@ codesign -d --verbose=4 "$app_path" 2>&1 | /usr/bin/grep 'flags=.*runtime' >/dev
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$output_dir/entitlements.plist" 2>/dev/null || true)" == true ]]; then
     echo "Refusing an app with debugging entitlement enabled" >&2; exit 1
 fi
+# Sparkle: the feed and key must be present, and its framework signed by the same team.
+/usr/bin/plutil -extract SUFeedURL raw "$app_path/Contents/Info.plist" | /usr/bin/grep -q 'releases/latest/download/appcast.xml'
+/usr/bin/plutil -extract SUPublicEDKey raw "$app_path/Contents/Info.plist" >/dev/null
+codesign -d --verbose=4 "$app_path/Contents/Frameworks/Sparkle.framework" 2>&1 | /usr/bin/grep "TeamIdentifier=$team_id" >/dev/null
 echo "Developer ID export verified: $app_path"
 echo "Notarize and staple the app before creating its distribution DMG."

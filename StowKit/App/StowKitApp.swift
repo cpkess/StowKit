@@ -4,6 +4,7 @@ import SwiftUI
 struct StowKitApp: App {
     @NSApplicationDelegateAdaptor(StowKitAppDelegate.self) private var appDelegate
     @State private var library = LibraryStore(root: CloudSetup.activeRoot)
+    @State private var updater = Updater()
     var body: some Scene {
         Window("StowKit", id: "library") {
             Group {
@@ -26,6 +27,11 @@ struct StowKitApp: App {
         }
         .defaultSize(width: 1320, height: 850)
         .commands {
+            if updater.isAvailable {
+                CommandGroup(after: .appInfo) {
+                    Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
+                }
+            }
             CommandGroup(after: .newItem) {
                 Button("Search All Documents") {
                     NotificationCenter.default.post(name: .stowKitGlobalSearch, object: nil)
@@ -53,6 +59,7 @@ struct StowKitApp: App {
                     }
                     InboxFolderSettingsView(library: library)
                     CloudSettingsView(library: library)
+                    UpdateSettingsView(updater: updater)
                 }.formStyle(.grouped)
                     .tabItem { Label("General", systemImage: "gearshape") }
                 FilingRulesView(library: library)

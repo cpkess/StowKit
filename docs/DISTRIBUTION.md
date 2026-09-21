@@ -33,6 +33,14 @@ scripts/notarize.sh build/releases/StowKit-VERSION.dmg YOUR_NOTARY_PROFILE
 (cd build/releases && shasum -a 256 StowKit-VERSION.dmg > StowKit-VERSION.dmg.sha256)
 ```
 
+Then write the Sparkle appcast and attach it to the release as `appcast.xml` with the DMG and checksum. The app's feed is `https://github.com/cpkess/StowKit/releases/latest/download/appcast.xml`, so every release must carry one:
+
+```sh
+scripts/make-appcast.sh build/releases/StowKit-VERSION.dmg VERSION BUILD
+```
+
+It refuses an unstapled DMG and signs with the EdDSA key in the Keychain (account `stowkit`).
+
 The final checksum must be generated **after** signing and stapling the DMG. Preserve the notarization result JSON with local build evidence. Mount the final image read-only, verify the contained app signature and staple, and assess it with Gatekeeper before uploading the DMG and checksum to GitHub. Do not replace a published artifact with an unnotarized build or ask users to bypass Gatekeeper.
 
 References: [Apple Developer ID](https://developer.apple.com/developer-id/), [notarization workflow](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution), [Xcode Developer ID export](https://help.apple.com/xcode/mac/current/en.lproj/dev88332a81e.html).
