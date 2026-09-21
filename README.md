@@ -1,6 +1,6 @@
 # StowKit
 
-A native, local-first macOS household document archive. **Local archive features and an opt-in CloudKit implementation are present.** Private iCloud passed a live smoke test; household sharing still requires two-account acceptance testing. The default build remains local.
+A native, local-first macOS household document archive. The local archive — importing, text reading, suggestions, search, and filing — is complete. Opt-in iCloud sync for your own Macs passed live tests. **Household sharing between different iCloud accounts is experimental and has not been tested with two accounts.** The default build is local only.
 
 ## Run
 
@@ -13,18 +13,18 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
 ## Use
 
 1. Import PDF, JPEG, PNG, or HEIC files with **⌘N**, the toolbar, or drag/drop from Finder. Multiple files are processed sequentially in the background.
-2. Imports appear in **Inbox** and automatically enter the background text-extraction queue. StowKit prefers usable PDF text and uses Apple Vision OCR for scanned pages and images. The inspector shows progress, **View Text**, and **Retry** when needed. Titles initially come from filenames and document dates initially use the import date. After OCR, a separate background stage suggests a title, document type, collection, correspondent, tags, and summary.
-3. High-confidence documents are filed automatically. Medium-confidence documents are filed with a **Suggested filing** label in Recent; uncertain results remain in Inbox. Inspect **Suggestions** to review the evidence or apply suggestions yourself. Choose **Mark Reviewed** when organized. OCR failure never removes a document; you can still preview and edit it. Failed extraction is surfaced in Inbox even for an otherwise reviewed document.
-4. Edit titles, summaries, correspondents, dates, tags, entities, Favorites, and collection membership in the inspector. Changes and custom collections persist immediately.
-5. Use **⌘K** to search the whole active library or **⌘F** to filter the current view. Search ranks titles, correspondents, metadata, and extracted text together, including words found on different pages. Type word prefixes such as `refrig warranty`, or use quotes for an exact phrase such as `"renewal date"`. Matches ignore case and accents and appear in highlighted snippets. Results load 50 at a time; use **Load More** to continue. Search results use relevance order; the Sort menu controls browsing without a query.
-6. Use **Quick Look**, the inline PDF/image preview, or **⌘O** to open an editable copy in another app. The archived original remains unchanged. Multipage PDFs have page navigation; password-protected PDFs can be archived and opened as copies for unlocking.
+2. Imports appear in **Inbox** and StowKit reads their text in the background, using the PDF's own text where it exists and Apple Vision for scanned pages and images. The details pane shows progress, **View Text**, and **Retry** when needed. Titles start as a cleaned-up filename (underscores and embedded timestamps removed), and the date comes from a year-first date in the filename, such as `2026-09-17` or `20260917`, falling back to the import date. Once the text is read, StowKit suggests a title, type, collection, sender, tags, and summary.
+3. Confident suggestions are filed automatically; fairly sure ones are filed and marked **Filed automatically** in the list; uncertain ones stay in Inbox marked **Needs review**. **Review Suggestions** shows what was suggested and why. Choose **Mark Reviewed** when a document is organized. A document whose text can't be read is never removed; you can still preview and edit it, and it stays in Inbox until the text problem is resolved.
+4. Edit the title, date, sender, collections (**Add to Collection**), tags, and summary at the top of the details pane; people and things, file details, text, and storage are under **More Details**. Changes and custom collections are saved immediately.
+5. Use **⌘K** to search the whole active library or **⌘F** to filter the current view. Search ranks titles, senders, metadata, and document text together, including words found on different pages. Type word prefixes such as `refrig warranty`, or use quotes for an exact phrase such as `"renewal date"`. Matches ignore case and accents and appear in highlighted snippets. Results load 50 at a time; use **Load More** to continue. Search results use relevance order; the Sort menu controls browsing without a query.
+6. Use **Quick Look**, the inline PDF/image preview, or **⌘O** to open an editable copy in another app. The archived original remains unchanged. Multipage PDFs have page navigation; password-protected PDFs can be archived and opened as copies for unlocking. The inline preview is a rendered image, so to copy text use **View Text** or open a copy.
 7. **Move to Trash** from the toolbar, context menu, or Delete key while the document list has focus. Restore from StowKit's **Trash**. Trash is retained indefinitely and still consumes disk space; this version has no permanent-delete action.
 
 Exact duplicates are detected across the entire archive, including Trash. The import report links to existing documents and identifies individual failures without stopping the remaining batch. A renamed duplicate does not overwrite edited metadata.
 
 ## Processing and recovery
 
-Text is saved one page at a time with its processing checkpoint. If StowKit quits during extraction, it resumes after the last saved page on the next launch. **Retry** keeps completed pages; **Extract Again** in the text-extraction menu discards derived text and starts over without touching the original. Moving a document to Trash pauses unfinished extraction; Restore resumes it.
+Text is saved one page at a time with its processing checkpoint. If StowKit quits during extraction, it resumes after the last saved page on the next launch. **Retry** keeps completed pages; **Read Text Again** in the text menu discards the saved text and starts over without touching the original. Moving a document to Trash pauses unfinished extraction; Restore resumes it.
 
 Existing Milestone 2 archives migrate automatically and receive processing jobs. The original document schema and original files are preserved. Password-protected PDFs remain archived but require an unlocked copy to be imported before OCR can run. Blank documents complete with “No text found.” OCR can make mistakes, so the original remains the source of truth.
 
@@ -32,11 +32,11 @@ The search index updates incrementally after imports, edits, and processing. Exi
 
 ## Document understanding
 
-On macOS 26 or later, StowKit uses Apple's on-device Foundation Models model when it is available. On older systems, unsupported Macs, or model errors, deterministic local rules recognize a small set of household document types. The inspector identifies the provider used. Apple Intelligence is never required for importing, OCR, search, or manual organization.
+On macOS 26 or later, StowKit uses Apple Intelligence's on-device model when it is available. Apple's default safety filter refuses many ordinary household records — any medical form, for example — so when it declines a document, StowKit asks again with Apple's permissive setting for transforming your own text, and validates the answer the same way. On older systems, unsupported Macs, or other model errors, built-in rules recognize a small set of household document types. The details pane says which one made each suggestion. Apple Intelligence is never required for importing, reading text, search, or manual organization.
 
-Suggestions cannot automatically replace fields you have edited, including fields you cleared. Archives from previous versions receive suggestions without automatic metadata changes. **Apply Suggestions** explicitly accepts the displayed proposal; **Analyze Again** retries against the saved extracted text. It does not rerun OCR or alter originals. Analysis resumes after interruption, pauses in Trash, and discards stale results if extraction is reset.
+Suggestions cannot automatically replace fields you have edited, including fields you cleared. Archives from previous versions receive suggestions without automatic metadata changes. **Use Suggestions** explicitly accepts the displayed proposal; **Suggest Again** retries against the saved text. It does not re-read the document or alter originals. Analysis resumes after interruption, pauses in Trash, and discards stale results if extraction is reset.
 
-Filing confidence is a conservative heuristic, not a calibrated probability. Conflicting/unknown types and long documents analyzed only as excerpts remain in Inbox. The first implementation uses at most 4,000 UTF-8 bytes from the first eight pages; it does not claim whole-document understanding for longer records. Dates, amounts, entities, reminders, and related-document links remain manual or future work.
+Filing confidence is a conservative heuristic, not a calibrated probability. Conflicting/unknown types and long documents analyzed only as excerpts remain in Inbox. The first implementation uses at most 4,000 UTF-8 bytes from the first eight pages; it does not claim whole-document understanding for longer records. Dates are read only from year-first filenames, not from document text; amounts, entities, reminders, and related-document links remain manual or future work.
 
 ## Storage and privacy
 
@@ -69,14 +69,14 @@ The XCTest target creates isolated temporary archives and generated fixtures. Th
 
 See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud architecture](docs/ICLOUD_ARCHITECTURE.md), the [optimized storage architecture](docs/STORAGE_ARCHITECTURE.md), [setup and live acceptance steps](docs/ICLOUD_SETUP.md), and [validation](docs/VALIDATION.md). Fake transport tests do not establish live CloudKit behavior. The Production schema is deployed and the isolated private-cloud smoke test passes. Two-account household acceptance, automatic local-file eviction, and cloud thumbnails remain unfinished. Optimized storage is designed but not implemented; originals are never evicted today.
 
-## Preview releases
+## Releases
 
-[v0.6.0-alpha.2](https://github.com/cpkess/StowKit/releases/tag/v0.6.0-alpha.2) provides a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries. Individual Mac registration is not required. It uses Production CloudKit. Read the [release notes](docs/releases/v0.6.0-alpha.2.md) for the remaining OCR and household-sharing limitations. The earlier alpha.1 asset is a device-restricted development build.
+[v1.0.0](https://github.com/cpkess/StowKit/releases/tag/v1.0.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit. Read the [release notes](docs/releases/v1.0.0.md) first: household sharing is experimental and untested across accounts. Earlier previews are [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md) and a device-restricted alpha.1.
 
 To package an already signed build without changing its signature:
 
 ```sh
-scripts/package-dmg.sh /path/to/StowKit.app 0.6.0-alpha.2 build/releases
+scripts/package-dmg.sh /path/to/StowKit.app 1.0.0 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.

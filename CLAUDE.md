@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 0.7.0, build 5.
+- Deployment target macOS 14.0. Current version 1.0.0, build 6.
 
 ## Architecture in one pass
 

@@ -1,5 +1,46 @@
 # Validation
 
+## Interface fixes, filename metadata, and Apple Intelligence on medical records
+
+September 21, 2026, macOS 27.0 (26A428), Apple M2 Max, the owner's archive in the running app.
+Full suite: **109 tests, zero failures.**
+
+**Apple Intelligence refused medical documents.** Standalone probes with StowKit's own
+instructions: model `available`. A neutral utility bill was read in 1.3 s. A fictional medical
+authorization form failed in 0.2 s with "May contain unsafe content". Switching to Apple's
+permissive content-transformation guardrails alone still refused, because they do not apply
+to guided (`@Generable`) output. Permissive guardrails with plain-text output read both medical
+samples in 0.4 s. A second defect hid the first: on macOS 27 the refusal is a
+`LanguageModelError`, while the code matched only the deprecated `GenerationError`. So the
+refusal was never recognized, and every medical record silently fell back to rules.
+`AppleFoundationModelProvider` now retries refusals of either type through the permissive
+plain-text path, parses the labelled answer with `ModelFields.parseLabeled`, and applies the
+same `UnderstandingPolicy.validated` checks. A collection is accepted only with a quote found in
+the text, and a sender only if it appears there. The live
+`testOnDeviceModelReadsMedicalDocumentsInsteadOfFallingBack` failed with the refusal before the
+fix and passes after it. The parser test covers the one-line " / " answer the model actually
+produced.
+
+**Filenames.** `FilenameMetadata` turns
+`NovoCare_Patient_OBES_Patient_Authorization_FORM_2026-09-17T00_18_36Z.pdf` into the title
+"NovoCare Patient OBES Patient Authorization FORM" and the date 2026-09-17. It reads year-first
+dates only; February 30th and month-first dates are rejected. `refreshAutomaticMetadataOnce`
+applied this to existing documents on launch without recording a manual edit, and re-queued
+rule-based analyses. On the owner's archive the document now shows the cleaned title and
+Sep 17, 2026, instead of Sep 21, and its suggestions read "Suggested by Apple Intelligence",
+where they had read "Local rules".
+
+**Interface, seen on screen.** A single review banner above the editable fields; title, date,
+sender, collections, tags, and summary visible without scrolling; a labelled **Add to
+Collection** control; processing, storage, and file details under **More Details**, which opens
+correctly; jargon replaced throughout.
+
+**Not established.** Suggestion quality across real documents: one real document was observed,
+and it stayed in review because long documents are analyzed from an excerpt and capped below
+the filing threshold. The permissive path deliberately relaxes Apple's content filter for the
+owner's own text; the answers are validated, but their content is not filtered. On macOS 26,
+the older `GenerationError` branch is compiled but untested.
+
 ## Disk accounting read off the real archive
 
 September 21, 2026: first reading of Settings → Measure Disk Use on the owner's populated archive,
