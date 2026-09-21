@@ -81,6 +81,9 @@ final class LibraryStore {
     private(set) var inboxFolderStatus = ""
     private(set) var filingRules: [FilingRule] = []
     private(set) var rulesMessage = ""
+    private(set) var organizeItems: [InboxBatchItem] = []
+    var isOrganizingInbox = false
+    var showOrganizeInbox = false
 
     init(root: URL = DocumentStorageManager.defaultRoot, processingEnabled: Bool = true) {
         self.processingEnabled = processingEnabled
@@ -533,6 +536,7 @@ final class LibraryStore {
         }
         refreshProcessingOverview()
         refreshTextSearch(resetLimit: false)
+        if isOrganizingInbox { refreshOrganizeItems() }
     }
     func retryAnalysis(_ id: UUID) {
         guard allowCloudEdit() else { return }
@@ -542,6 +546,31 @@ final class LibraryStore {
             if processingEnabled { intelligenceProcessor?.start() }
         } catch { errorMessage = error.localizedDescription }
     }
+    // MARK: Organize Inbox (batch)
+
+    func refreshOrganizeItems() { organizeItems = (try? repository?.inboxBatchItems()) ?? [] }
+    func suggestForAllInbox() {
+        guard allowCloudEdit(), let repository else { return }
+        do {
+            try repository.requestAnalyses(organizeItems.map(\.id))
+            refreshOrganizeItems(); refreshProcessingOverview()
+            if processingEnabled { intelligenceProcessor?.start() }
+        } catch { errorMessage = "Suggestions could not be requested.\n\n\(error.localizedDescription)" }
+    }
+    /// Accepts each chosen document's suggestion with its collection; one failure doesn't stop the rest.
+    func applyOrganize(_ choices: [UUID: String]) {
+        guard allowCloudEdit(), let repository else { return }
+        var failed = 0
+        for (id, collection) in choices {
+            do { try repository.acceptSuggestion(id, collection: collection) } catch { failed += 1 }
+        }
+        let done = choices.count - failed
+        lastImportMessage = "Organized \(done) \(done == 1 ? "document" : "documents")"
+        if failed > 0 { errorMessage = "\(failed) \(failed == 1 ? "document" : "documents") couldn’t be organized and stayed in Inbox." }
+        selectedOverride = nil
+        refreshTextSearch(resetLimit: false); refreshProcessingOverview(); refreshOrganizeItems(); syncNow()
+    }
+
     // MARK: Inbox review flow
 
     /// Present only while browsing Inbox, where each decision removes the document from the list.

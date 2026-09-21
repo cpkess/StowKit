@@ -40,6 +40,8 @@ struct StowKitApp: App {
                     NotificationCenter.default.post(name: .stowKitSearch, object: nil)
                 }.keyboardShortcut("f")
                 Divider()
+                Button("Organize Inbox…") { library.destination = .inbox; library.showOrganizeInbox = true }
+                    .keyboardShortcut("i", modifiers: [.command, .shift]).disabled(!library.isReady || library.inboxCount == 0)
                 Button("Sync Now") { library.syncNow() }.disabled(!library.cloudEnabled)
             }
         }

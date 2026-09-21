@@ -1,5 +1,26 @@
 # Validation
 
+## Organize Inbox: batch suggestions and filing (unreleased)
+
+September 21, 2026. Organize Inbox… (button under the Inbox list, and File → ⇧⌘I) opens a window
+listing every document awaiting review, not just the loaded page, with its suggested title,
+sender, collection (changeable per row, or None), and certainty, each with a checkbox. Suggest for All
+re-queues suggestions for every Inbox document not already being read, and the rows update as each
+finishes. Apply accepts each ticked row the way Use Suggestions does, with the row's collection:
+suggested fields filled and protected, filed, and marked reviewed. One failure doesn't stop the rest.
+Use Suggestions now goes through the same `acceptSuggestion`.
+
+`InboxBatchTests`, 5 tests, pass: only reviewable documents outside Trash are listed; Suggest for All
+skips an analysis in flight without restarting it; a chosen collection overrides the suggested one
+and is protected; accepting works without a suggestion and ignores an unknown collection; Use
+Suggestions still takes the suggested collection. (The first run failed: the test document was
+already queued, which the code rightly skips; the test now finishes a suggestion first.) Full suite:
+149 tests, 0 failures.
+
+**Not established.** The window itself has not been seen: on the signed test build the owner's Inbox
+was empty (they had already filed its documents with the review card), so the command was disabled,
+and test documents were not added to the real archive because they would sync to iCloud.
+
 ## Why Apple Intelligence never assigned a collection, and an Inbox review flow (unreleased)
 
 September 21, 2026, signed test builds on the owner's archive. A temporary probe in

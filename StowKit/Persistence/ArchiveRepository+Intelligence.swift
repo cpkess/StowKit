@@ -124,18 +124,7 @@ extension ArchiveRepository {
         catch { context.rollback(); throw error }
     }
     func acceptAnalysis(_ id: UUID) throws {
-        guard let job = try analysis(id), let result = job.snapshot.result, let document = try document(id), document.trashedAt == nil else { return }
-        // Acceptance is an explicit decision even when the automatic values already match.
-        // Save these protections in the same transaction as the normal metadata update.
-        var fields = Set(job.protectedFields)
-        fields.insert("review")
-        if !result.title.isEmpty { fields.insert("title") }
-        if !result.summary.isEmpty { fields.insert("summary") }
-        if !result.correspondent.isEmpty { fields.insert("correspondent") }
-        if !result.collection.isEmpty { fields.insert("collections") }
-        if !result.tags.isEmpty { fields.insert("tags") }
-        job.protectedFields = fields.sorted()
-        let edited = UnderstandingPolicy.merge(result, into: document, protected: [], explicit: true)
-        try update(edited)
+        guard let result = try analysis(id)?.snapshot.result else { return }
+        try acceptSuggestion(id, collection: result.collection)
     }
 }

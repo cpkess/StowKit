@@ -119,6 +119,10 @@ struct LibraryView: View {
                     // Row heights differ only between browsing and searching; rebuild when that flips.
                     .id(library.search.isEmpty)
                 }
+                if library.destination == .inbox && !library.visibleDocuments.isEmpty && library.search.isEmpty {
+                    Button { library.showOrganizeInbox = true } label: { Label("Organize Inbox…", systemImage: "wand.and.stars") }
+                        .padding(8).help("Suggest collections for every Inbox document and file them together (⇧⌘I)")
+                }
                 if library.destination == .trash && !library.visibleDocuments.isEmpty && library.search.isEmpty {
                     Button("Empty Trash…", role: .destructive) { pendingDeletion = library.trashedDocumentIDs() }
                         .padding(8)
@@ -225,6 +229,7 @@ struct LibraryView: View {
             library.destination = .recent
             searchFocused = true
         }
+        .sheet(isPresented: $library.showOrganizeInbox) { OrganizeInboxView(library: library) }
         .confirmationDialog("Keep your archive in iCloud?", isPresented: $library.cloudProposal, titleVisibility: .visible) {
             Button("Upload to iCloud") { Task { await library.connectCloud() } }
             Button("Not Now", role: .cancel) {}
