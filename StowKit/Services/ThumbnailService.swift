@@ -19,7 +19,21 @@ actor ThumbnailService {
     func imagePreview(for document: HouseholdDocument) async throws -> Data {
         try render(url: await storage.localOriginal(for: document), isImage: true, maxPixelSize: 2048)
     }
-    private func render(url: URL, isImage: Bool, maxPixelSize: Int) throws -> Data {
+    /// Page count and lock state read with Core Graphics. The preview deliberately avoids
+    /// `PDFView`: its built-in Live Text analysis once starved the dispatch pool and froze the
+    /// app when macOS text recognition was degraded (see docs/VALIDATION.md, 2026-09-20).
+    func pdfOutline(for document: HouseholdDocument) async throws -> (pages: Int, locked: Bool) {
+        let url = try await storage.localOriginal(for: document)
+        guard let pdf = CGPDFDocument(url as CFURL) else { throw ArchiveError.invalidDocument }
+        if pdf.isEncrypted && !pdf.isUnlocked { return (0, true) }
+        guard pdf.numberOfPages > 0 else { throw ArchiveError.invalidDocument }
+        return (pdf.numberOfPages, false)
+    }
+    /// One rendered page, zero-based, for the preview pane.
+    func pagePreview(for document: HouseholdDocument, index: Int) async throws -> Data {
+        try render(url: await storage.localOriginal(for: document), isImage: false, maxPixelSize: 2048, page: index + 1)
+    }
+    private func render(url: URL, isImage: Bool, maxPixelSize: Int, page pageNumber: Int = 1) throws -> Data {
         let image: CGImage
         if isImage {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -31,7 +45,7 @@ actor ThumbnailService {
                   ] as CFDictionary) else { throw ArchiveError.invalidDocument }
             image = thumbnail
         } else {
-            guard let pdf = CGPDFDocument(url as CFURL), let page = pdf.page(at: 1) else { throw ArchiveError.invalidDocument }
+            guard let pdf = CGPDFDocument(url as CFURL), let page = pdf.page(at: pageNumber) else { throw ArchiveError.invalidDocument }
             let box = page.getBoxRect(.cropBox)
             guard box.width > 0, box.height > 0 else { throw ArchiveError.invalidDocument }
             let rotated = abs(page.rotationAngle) % 180 == 90

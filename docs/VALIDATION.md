@@ -1,6 +1,64 @@
 # Validation
 
+## Launch freeze root cause: a VSplitView rebuild loop in StowKit
+
+September 21, 2026. **This corrects the entry below, which concluded the freeze was a transient
+macOS state and not a code defect. That was wrong.** The freeze is a StowKit bug and reproduces
+on a healthy system.
+
+`DocumentDetailView` held the preview in a `VSplitView`. Temporary probes, read by launching
+with `open --stderr <file>` (the sandboxed app's `NSLog` output did not reach `log show`),
+counted what happened in 15 seconds with a two-page PDF selected:
+
+| Event | Count |
+| --- | --- |
+| Detail view appeared | 1 |
+| Detail view body evaluated | 3 |
+| Preview pane appeared (destroyed and rebuilt) | 302 |
+| Preview load task started | 302 |
+
+The split view rebuilt its own top pane about 20 times a second while nothing above it redrew,
+and each rebuild reset the pane's state and restarted its load. CPU held at ~200%. Guarding the
+pane's write to its parent's state changed nothing (302 again), so that was not the trigger.
+Replacing `VSplitView` with a `VStack` dropped every count to 1 and CPU to 0%.
+
+With the shipped preview, every rebuild created a new `PDFDocument` and a new `PDFView`, and
+each `PDFView` runs PDFKit's Vision page analysis. Running the committed `00cdf8c` code (still
+`PDFView` in a `VSplitView`) after a restart, with **no `e5rt` messages present**:
+
+| Measurement | Result |
+| --- | --- |
+| `PDFView`s created | 454 in about 15 s |
+| `PDFDocument`s created | 454 |
+| Threads | 379 at 15 s, then 521 |
+| Resident memory | 3.5 GB |
+| Quit Apple Event | hung; the process had to be killed |
+
+That is the original freeze, reproduced without the degraded Vision state. The 261 blocked
+analyzer threads and 1.8 GB recorded on September 20 are this loop.
+
+**Fix, in `DocumentDetailView`:** the preview and inspector sit in a `VStack`, and the preview
+renders pages with `CGPDFDocument` through `ThumbnailService` instead of hosting `PDFView`.
+Either change alone would stop the freeze; both are kept, because the split view also wasted
+CPU re-rendering, and `PDFView`'s analysis remains a hazard when Vision is unwell. Measured
+on the same archive and document over 60 s: **0% CPU, 4 threads, 178 MB** throughout. The page
+rendered, "Page 2 of 2" rendered after paging, and CPU stayed at 0% afterwards. Full suite: **102
+tests, zero failures**, including
+`testPreviewRendersEachPageWithCoreGraphicsAndReportsLockedPDFs`.
+
+**Not established.** Why `VSplitView` rebuilds its pane; that is SwiftUI's behavior, observed but
+not explained. Whether it depends on the document — it was observed with a two-page PDF
+selected — and why the shipped build sat idle at 0% right after the September 20 restart,
+possibly because a different document was selected; that is unverified. The degraded `e5rt`
+state may have made the first incident worse, but it is not required to reproduce it. No
+automated test covers view rebuilds, because the XCTest host renders no library view; the probe
+method above is the check. Text selection inside the preview pane is gone; View Text and Open a
+Copy remain.
+
 ## Launch freeze traced to a transient system Vision state
+
+> **Superseded.** The conclusion below is wrong: the freeze is a StowKit bug, reproduced after
+> the restart without the degraded state. See the entry above. The measurements below stand.
 
 September 20, 2026: the installed v0.6.0-alpha.2 froze on launch from `/Applications`. The
 cause was a macOS text-recognition state that a restart cleared. **No StowKit code was

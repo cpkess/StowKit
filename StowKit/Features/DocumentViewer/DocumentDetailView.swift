@@ -1,5 +1,4 @@
 import SwiftUI
-import PDFKit
 import QuickLook
 
 struct DocumentDetailView: View {
@@ -41,9 +40,14 @@ struct DocumentDetailView: View {
                 }
             }.padding(20)
             Divider()
-            VSplitView {
+            // Not VSplitView: it tore down and rebuilt the preview pane ~20 times a second while
+            // the parent redrew only 3 times, restarting its load each time. With PDFView that
+            // made 454 viewers in 15s, each running PDFKit's Vision analysis, and the app froze.
+            // See docs/VALIDATION.md, 2026-09-21. Do not reintroduce a split view here.
+            VStack(spacing: 0) {
                 preview.frame(minHeight: 200, idealHeight: 390, maxHeight: .infinity)
                 if showDetails {
+                    Divider()
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
@@ -158,7 +162,9 @@ private struct DocumentPreview: View {
     @Binding var localAvailable: Bool?
     @State private var cloudOnly = false
     @State private var requestDownload = false
-    @State private var pdf: PDFDocument?
+    @State private var pdfPages: Int?
+    @State private var pdfLocked = false
+    @State private var pageImage: NSImage?
     @State private var image: NSImage?
     @State private var failure: String?
     @State private var pageIndex = 0
@@ -176,19 +182,24 @@ private struct DocumentPreview: View {
                 ContentUnavailableView {
                     Label("Preview Unavailable", systemImage: "doc.badge.ellipsis")
                 } description: { Text(failure) } actions: { Button("Retry") { reload += 1 } }
-            } else if let pdf {
-                if pdf.isLocked {
+            } else if let pdfPages {
+                if pdfLocked {
                     ContentUnavailableView("Password-Protected PDF", systemImage: "lock.doc", description: Text("Your original is safely archived. Open a copy in Preview to unlock it."))
                 } else {
                     VStack(spacing: 0) {
-                        PDFPreview(document: pdf, pageIndex: $pageIndex)
-                        if pdf.pageCount > 1 {
+                        Group {
+                            if let pageImage {
+                                Image(nsImage: pageImage).resizable().scaledToFit().padding(20)
+                                    .accessibilityLabel("\(document.title), page \(pageIndex + 1)")
+                            } else { ProgressView() }
+                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if pdfPages > 1 {
                             HStack {
                                 Button { pageIndex = max(0, pageIndex - 1) } label: { Image(systemName: "chevron.left") }
                                     .disabled(pageIndex == 0).accessibilityLabel("Previous Page")
-                                Text("Page \(pageIndex + 1) of \(pdf.pageCount)").monospacedDigit()
-                                Button { pageIndex = min(pdf.pageCount - 1, pageIndex + 1) } label: { Image(systemName: "chevron.right") }
-                                    .disabled(pageIndex == pdf.pageCount - 1).accessibilityLabel("Next Page")
+                                Text("Page \(pageIndex + 1) of \(pdfPages)").monospacedDigit()
+                                Button { pageIndex = min(pdfPages - 1, pageIndex + 1) } label: { Image(systemName: "chevron.right") }
+                                    .disabled(pageIndex == pdfPages - 1).accessibilityLabel("Next Page")
                             }.buttonStyle(.borderless).font(.caption).padding(8)
                         }
                     }
@@ -200,7 +211,7 @@ private struct DocumentPreview: View {
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .task(id: reload) {
-            pdf = nil; image = nil; failure = nil; pageIndex = 0; cloudOnly = false
+            pdfPages = nil; pdfLocked = false; pageImage = nil; image = nil; failure = nil; pageIndex = 0; cloudOnly = false
             do {
                 if try await storage.cachedOriginal(for: document) == nil {
                     localAvailable = false
@@ -217,47 +228,25 @@ private struct DocumentPreview: View {
                     guard let decoded = NSImage(data: data) else { throw ArchiveError.invalidDocument }
                     image = decoded
                 } else {
-                    let url = try await storage.localOriginal(for: document)
-                    let loaded = try await Task.detached(priority: .userInitiated) {
-                        guard let loaded = PDFDocument(url: url) else { throw ArchiveError.invalidDocument }
-                        return loaded
-                    }.value
+                    let outline = try await thumbnails.pdfOutline(for: document)
                     guard !Task.isCancelled else { return }
-                    pdf = loaded
+                    pdfLocked = outline.locked
+                    pdfPages = outline.pages
+                    if !outline.locked { try await renderPage(0) }
                 }
             } catch { if !Task.isCancelled { failure = error.localizedDescription } }
         }
-    }
-}
-
-private struct PDFPreview: NSViewRepresentable {
-    let document: PDFDocument
-    @Binding var pageIndex: Int
-    func makeCoordinator() -> Coordinator { Coordinator(pageIndex: $pageIndex) }
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayMode = .singlePage
-        view.backgroundColor = .underPageBackgroundColor
-        NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.pageChanged(_:)), name: .PDFViewPageChanged, object: view)
-        return view
-    }
-    func updateNSView(_ view: PDFView, context: Context) {
-        context.coordinator.pageIndex = $pageIndex
-        if view.document !== document { view.document = document }
-        if let page = document.page(at: pageIndex), view.currentPage !== page { view.go(to: page) }
-        view.autoScales = true
-    }
-    static func dismantleNSView(_ view: PDFView, coordinator: Coordinator) {
-        NotificationCenter.default.removeObserver(coordinator)
-    }
-    final class Coordinator: NSObject {
-        var pageIndex: Binding<Int>
-        init(pageIndex: Binding<Int>) { self.pageIndex = pageIndex }
-        @objc func pageChanged(_ notification: Notification) {
-            guard let view = notification.object as? PDFView, let page = view.currentPage,
-                  let index = view.document?.index(for: page), index != NSNotFound else { return }
-            DispatchQueue.main.async { [weak self] in self?.pageIndex.wrappedValue = index }
+        .task(id: pageIndex) {
+            guard let pdfPages, !pdfLocked, pageIndex < pdfPages else { return }
+            do { try await renderPage(pageIndex) }
+            catch { if !Task.isCancelled { failure = error.localizedDescription } }
         }
+    }
+
+    private func renderPage(_ index: Int) async throws {
+        let data = try await thumbnails.pagePreview(for: document, index: index)
+        guard !Task.isCancelled, index == pageIndex else { return }
+        guard let decoded = NSImage(data: data) else { throw ArchiveError.invalidDocument }
+        pageImage = decoded
     }
 }

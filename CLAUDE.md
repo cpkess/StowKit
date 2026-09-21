@@ -139,21 +139,25 @@ both places. Don't "simplify" that away.
 
 ## Known issues / traps
 
-- **`e5rt` log lines mean macOS text recognition is in a degraded state — do not dismiss them.**
-  They name *system* model bundles under
-  `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, not any
-  StowKit-generated cache (that earlier diagnosis was wrong; no such cache exists). While they
-  were present on 2026-09-20 the app froze on launch: PDFKit's own Live Text analyzer piled up
-  261 blocked Vision requests and starved the dispatch pool at 1.8 GB. The test suite passed
-  straight through it, because it runs one recognition at a time — so **green tests do not
-  clear this**. A restart removed the messages and the freeze. If they reappear, capture a
-  `sample` of the process before doing anything else.
-- **A launch freeze is probably not our bug, but check before assuming either way.** The
-  2026-09-20 freeze reproduced in the shipped build *and* current `main`, survived disabling
-  our own OCR, and vanished on restart. `docs/VALIDATION.md` has the full method. If it
-  recurs, the defensive fix is to preview with `CGPDFDocument` (already used by thumbnails and
-  OCR) instead of `PDFView`. `PDFView.setDocumentAnalysisEnabled:` exists at runtime but is
-  not public SDK API — ask before using it.
+- **Never put the document preview back in a `VSplitView`.** The launch freeze of 2026-09-20 was
+  our bug: the split view rebuilt the preview pane ~20 times a second (302 rebuilds in 15 s
+  while its parent redrew 3 times), and with `PDFView` each rebuild made a new viewer running
+  PDFKit's Vision analysis — 454 in 15 s, 521 threads, 3.5 GB, app hung. It reproduced on a
+  healthy Mac. `DocumentDetailView` now uses a `VStack`, and the preview renders with
+  `CGPDFDocument` rather than `PDFView`. Don't reintroduce either.
+- **A restart making a symptom disappear is not a root cause.** That freeze was first written
+  up as a transient macOS state because it vanished after a restart; running the old code
+  again proved otherwise. Reproduce with the old code before concluding anything is external.
+- **To count view rebuilds, launch with `open --stderr <file>` and `NSLog` probes.** The
+  sandboxed app's `NSLog` and `Logger` output did not show up in `log show`, which made two
+  rounds of probes look like they never ran. XCTest can't catch this: its host renders no
+  library view.
+- **`e5rt` log lines mean macOS text recognition is degraded.** They name *system* model bundles
+  under `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, not any
+  StowKit cache (no such cache exists). They were present during the first freeze and may
+  have worsened it, but the freeze reproduces without them. The single-threaded test suite
+  passes through them, so green tests do not clear them. `PDFView.setDocumentAnalysisEnabled:`
+  exists at runtime but is not public SDK API — ask before using it.
 - **First Vision call costs ~46s cold, ~0.08s warm**, measured in a standalone tool with no
   StowKit code — it is Apple's cost, not ours. The warm state is shared across processes but
   expires after idle, so this *recurs*; it is not a one-time first-launch charge. Extraction

@@ -193,6 +193,31 @@ import UniformTypeIdentifiers
         XCTAssertEqual(after, [0: 1, 1: 1, 2: 1])
     }
 
+    func testPreviewRendersEachPageWithCoreGraphicsAndReportsLockedPDFs() async throws {
+        let thumbnails = ThumbnailService(storage: storage)
+        let mixed = try await importer.importFile(makePDF("Preview.pdf", mixed: true)).document
+        let outline = try await thumbnails.pdfOutline(for: mixed)
+        XCTAssertEqual(outline.pages, 2)
+        XCTAssertFalse(outline.locked)
+
+        var rendered: [Data] = []
+        for index in 0..<outline.pages {
+            let data = try await thumbnails.pagePreview(for: mixed, index: index)
+            let image = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil)
+                .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+            XCTAssertEqual(max(image.width, image.height), 2048, "preview pages render at full preview size")
+            rendered.append(data)
+        }
+        // Page one is text and page two a scan; identical bytes would mean page one twice.
+        XCTAssertNotEqual(rendered[0], rendered[1])
+        do { _ = try await thumbnails.pagePreview(for: mixed, index: 2); XCTFail("a page past the end must not render") }
+        catch {}
+
+        let locked = try await importer.importFile(makePDF("PreviewLocked.pdf", password: "testing-only")).document
+        let lockedOutline = try await thumbnails.pdfOutline(for: locked)
+        XCTAssertTrue(lockedOutline.locked, "a password-protected PDF shows the locked state, not a render")
+    }
+
     func testLockedPDFFailsWithoutBlockingNextDocument() async throws {
         let locked = try await importer.importFile(makePDF("Locked.pdf", password: "testing-only")).document
         let good = try await importer.importFile(makePDF("Good.pdf")).document
