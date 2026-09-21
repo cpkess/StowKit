@@ -48,7 +48,7 @@ struct LibraryView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 260)
             .safeAreaInset(edge: .bottom) {
                 HStack {
-                    ArchivePicker(library: library)
+                    SyncStatusButton(library: library)
                     Spacer()
                     Button { showCollectionSheet = true } label: { Image(systemName: "plus") }
                         .buttonStyle(.borderless).help("New Collection")
@@ -221,6 +221,12 @@ struct LibraryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .stowKitGlobalSearch)) { _ in
             library.destination = .recent
             searchFocused = true
+        }
+        .confirmationDialog("Keep your archive in iCloud?", isPresented: $library.cloudProposal, titleVisibility: .visible) {
+            Button("Upload to iCloud") { Task { await library.connectCloud() } }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("StowKit keeps one archive in your iCloud account, with copies on this Mac. This uploads the \(library.statistics.documents) documents on this Mac, with their details and text.")
         }
         .alert("StowKit", isPresented: Binding(get: { library.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil } })) {
             Button("OK") { library.errorMessage = nil }

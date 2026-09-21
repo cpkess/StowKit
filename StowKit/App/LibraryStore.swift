@@ -29,7 +29,10 @@ final class LibraryStore {
     var cloudAccessSuspended = false
     var cloudEnabled = false
     var cloudBusy = false
-    var cloudArchives: [CloudArchiveBinding] = []
+    /// Why this Mac isn't using the iCloud archive, when the resolver decided to stay local.
+    var archiveNote: String?
+    /// Set when an archive holding documents could move to iCloud; the owner confirms first.
+    var cloudProposal = false
     var cloudConflicts: [StoredSyncConflict] = []
     @ObservationIgnored private var cloudCoordinator: CloudSyncCoordinator?
     @ObservationIgnored private var cloudTimer: Task<Void, Never>?
@@ -98,8 +101,8 @@ final class LibraryStore {
             try await transport.verifyAccount()
             cloudReadOnly = !(try await transport.canWrite())
             try repository.bindCloud(binding)
-            cloudEnabled = true; cloudHasError = false; cloudAccessSuspended = false
-            if isThisMacArchive { UserDefaults.standard.set(true, forKey: Self.thisMacSyncsKey) }
+            cloudEnabled = true; cloudHasError = false; cloudAccessSuspended = false; archiveNote = nil
+            UserDefaults.standard.removeObject(forKey: Self.cloudPausedKey)
             await storage.setCloudTransport(transport)
             cloudCoordinator = CloudSyncCoordinator(repository: repository, storage: storage, reader: reader, transport: transport,
                 onStatus: { [weak self] status, failed in self?.cloudStatus = status; self?.cloudHasError = failed },
@@ -115,22 +118,29 @@ final class LibraryStore {
             }
             if accountObserver == nil {
                 accountObserver = NotificationCenter.default.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
+                    // Not `pauseCloud()`: that records an owner's pause and would leave iCloud off.
+                    // Reconnecting re-verifies the account and refuses a different one.
                     Task { @MainActor in
                         guard let self else { return }
                         self.cloudAccessSuspended = binding.shared
-                        self.cloudStatus = "iCloud account changed. Reconnect to verify access."; self.cloudHasError = true
-                        await self.pauseCloud()
+                        await self.stopCloudTransport()
+                        await self.connectCloud()
                     }
                 }
             }
         } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
     }
+    /// Only the owner pauses iCloud. The pause is remembered so launch doesn't reconnect.
     func pauseCloud() async {
+        await stopCloudTransport()
+        try? repository?.disableCloud(); cloudEnabled = false
+        UserDefaults.standard.set(true, forKey: Self.cloudPausedKey)
+        cloudStatus = "iCloud is paused"; cloudHasError = false
+    }
+    private func stopCloudTransport() async {
         cloudTimer?.cancel(); cloudTimer = nil
         await cloudCoordinator?.stop(); cloudCoordinator = nil
         await storage.setCloudTransport(nil)
-        try? repository?.disableCloud(); cloudEnabled = false
-        if isThisMacArchive { UserDefaults.standard.set(false, forKey: Self.thisMacSyncsKey) }
     }
     func shutdownForSwitch() async {
         cloudTimer?.cancel(); searchTask?.cancel()
@@ -139,55 +149,37 @@ final class LibraryStore {
     }
     func syncNow() { cloudCoordinator?.schedule() }
 
-    // MARK: Archive switching
+    // MARK: The one archive
 
-    /// This Mac's own archive can also appear in the iCloud list once iCloud is on. Remembering its
-    /// ID lets the picker show it once, instead of offering to open a second local copy of it.
+    static let cloudPausedKey = "StowKitCloudPausedByOwner"
+    /// This Mac's own archive ID, remembered so a stale iCloud copy of it is never reopened.
     static let thisMacArchiveKey = "StowKitThisMacArchiveID"
     private var isThisMacArchive: Bool { storage.root.standardizedFileURL == DocumentStorageManager.defaultRoot.standardizedFileURL }
-    private var thisMacArchiveID: UUID? {
-        if isThisMacArchive, let repository { return repository.archiveID }
-        return UserDefaults.standard.string(forKey: Self.thisMacArchiveKey).flatMap(UUID.init(uuidString:))
-    }
-    var currentArchive: ArchiveChoice { archiveChoices.first(where: \.isCurrent) ?? thisMacChoice(current: true) }
-    var archiveChoices: [ArchiveChoice] {
-        var choices = [thisMacChoice(current: isThisMacArchive)]
-        let currentID = repository?.archiveID
-        for binding in cloudArchives where binding.archiveID != thisMacArchiveID {
-            let short = String(binding.archiveID.uuidString.prefix(4))
-            choices.append(ArchiveChoice(id: binding.zoneName, kind: binding.shared ? .shared : .iCloud,
-                title: binding.shared ? "Shared Household \(short)" : "iCloud Archive \(short)",
-                subtitle: binding.shared ? "Shared with you" : "Stored in iCloud",
-                isCurrent: !isThisMacArchive && binding.archiveID == currentID, binding: binding))
+    var archiveTitle: String { cloudEnabled ? (cloudReadOnly ? "Shared Household" : "iCloud") : "On This Mac" }
+
+    /// Launch-time: find the one archive in iCloud and use it. See `ArchiveResolver`.
+    private func resolveArchive() async {
+        guard let repository, CloudSetup.containerID != nil else { return }
+        var facts = ArchiveFacts(localArchiveID: repository.archiveID, documentCount: (try? repository.documentCount()) ?? 1,
+            binding: try? repository.cloudBinding(), pausedByOwner: UserDefaults.standard.bool(forKey: Self.cloudPausedKey), privateZones: [])
+        if facts.binding?.1 != true && !facts.pausedByOwner {
+            do { facts.privateZones = try await CloudSetup.archives().filter { !$0.shared } }
+            catch { cloudStatus = error.localizedDescription; cloudHasError = true; return }
         }
-        // The archive in use must always be listed, even before iCloud archives are fetched.
-        if !isThisMacArchive, !choices.contains(where: \.isCurrent), let binding = try? repository?.cloudBinding()?.0 {
-            choices.append(ArchiveChoice(id: binding.zoneName, kind: binding.shared ? .shared : .iCloud,
-                title: binding.shared ? "Shared Household" : "iCloud Archive", subtitle: "Stored in iCloud",
-                isCurrent: true, binding: binding))
+        switch ArchiveResolver.resolve(facts) {
+        case .connect: await connectCloud()
+        case .upload(let ask): if ask { cloudProposal = true } else { await connectCloud() }
+        case .join(let binding): await openCloudArchive(binding)
+        case .stayLocal(let reason): archiveNote = reason; cloudStatus = reason
         }
-        return choices
     }
-    static let thisMacSyncsKey = "StowKitThisMacArchiveSyncs"
-    private func thisMacChoice(current: Bool) -> ArchiveChoice {
-        let syncing = current ? cloudEnabled : UserDefaults.standard.bool(forKey: Self.thisMacSyncsKey)
-        return ArchiveChoice(id: "this-mac", kind: syncing ? .iCloud : .thisMac,
-            title: syncing ? "My Archive" : "On My Mac",
-            subtitle: syncing ? "In iCloud, with copies on this Mac" : "Stored on this Mac",
-            isCurrent: current, binding: nil)
-    }
-    func switchArchive(to choice: ArchiveChoice) async {
-        guard !choice.isCurrent else { return }
-        if let binding = choice.binding { await openCloudArchive(binding); return }
-        await pauseCloudTransportForSwitch()
-        UserDefaults.standard.removeObject(forKey: "StowKitArchiveRoot")
-        NotificationCenter.default.post(name: .stowKitSwitchArchive, object: DocumentStorageManager.defaultRoot)
-    }
-    /// Stop sync and background work before switching, without turning iCloud off for this archive.
-    private func pauseCloudTransportForSwitch() async {
-        cloudTimer?.cancel(); cloudTimer = nil
-        await cloudCoordinator?.stop(); cloudCoordinator = nil
-        await processor?.stop(); await intelligenceProcessor?.stop()
+    private func openCloudArchive(_ binding: CloudArchiveBinding) async {
+        do {
+            await stopCloudTransport()
+            await processor?.stop(); await intelligenceProcessor?.stop()
+            let root = try CloudSetup.prepareArchive(binding)
+            NotificationCenter.default.post(name: .stowKitSwitchArchive, object: root)
+        } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
     }
 
     // MARK: Local copies (iCloud Drive–style)
@@ -204,19 +196,6 @@ final class LibraryStore {
             do { _ = try await storage.localOriginal(for: document); refreshStorageState(id); refreshTextSearch(resetLimit: false) }
             catch { storageError = error.localizedDescription }
         }
-    }
-    func findCloudArchives() async {
-        cloudBusy = true; defer { cloudBusy = false }
-        do { cloudArchives = try await CloudSetup.archives() }
-        catch { cloudStatus = error.localizedDescription; cloudHasError = true }
-    }
-    func openCloudArchive(_ binding: CloudArchiveBinding) async {
-        do {
-            // Stop sync without `pauseCloud()`, which would turn iCloud off for the archive being left.
-            await pauseCloudTransportForSwitch()
-            let root = try CloudSetup.prepareArchive(binding)
-            NotificationCenter.default.post(name: .stowKitSwitchArchive, object: root)
-        } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
     }
     func showHouseholdSharing() async {
         do { if let binding = try repository?.cloudBinding()?.0 { try await CloudSetup.share(binding) } }
@@ -294,10 +273,9 @@ final class LibraryStore {
             refreshTextSearch()
             await waitForSearch()
             reconcileSelection()
-            if let binding = try repository.cloudBinding() {
-                if binding.0.shared { cloudAccessSuspended = true; cloudReadOnly = true }
-                if binding.1 { await connectCloud() }
-            }
+            if let binding = try repository.cloudBinding(), binding.0.shared { cloudAccessSuspended = true; cloudReadOnly = true }
+            if isThisMacArchive { ArchiveCopies.retire(duplicatesOf: repository, under: storage.root) }
+            await resolveArchive()
             if processingEnabled && !cloudReadOnly && !cloudAccessSuspended { processor?.start(); intelligenceProcessor?.start() }
         } catch { startupError = error.localizedDescription }
     }

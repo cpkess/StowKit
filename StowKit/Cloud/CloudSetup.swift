@@ -11,9 +11,19 @@ import CryptoKit
     }
     static var environment: String { Bundle.main.object(forInfoDictionaryKey: "StowKitCloudEnvironment") as? String ?? "Development" }
     static var activeRoot: URL {
-        guard let relative = UserDefaults.standard.string(forKey: "StowKitArchiveRoot"),
-              relative.hasPrefix("CloudArchives/"), !relative.contains("..") else { return DocumentStorageManager.defaultRoot }
-        return DocumentStorageManager.defaultRoot.appendingPathComponent(relative)
+        let relative = UserDefaults.standard.string(forKey: "StowKitArchiveRoot")
+        let root = root(for: relative, thisMacArchiveID: UserDefaults.standard.string(forKey: LibraryStore.thisMacArchiveKey),
+                        base: DocumentStorageManager.defaultRoot)
+        if relative != nil, root == DocumentStorageManager.defaultRoot { UserDefaults.standard.removeObject(forKey: "StowKitArchiveRoot") }
+        return root
+    }
+    /// A remembered iCloud copy of this Mac's own archive is a duplicate, not a second archive:
+    /// earlier builds could open one from the picker. Open the real archive instead.
+    nonisolated static func root(for relative: String?, thisMacArchiveID: String?, base: URL) -> URL {
+        guard let relative, relative.hasPrefix("CloudArchives/"), !relative.contains("..") else { return base }
+        if let own = thisMacArchiveID.flatMap(UUID.init(uuidString:)),
+           UUID(uuidString: URL(fileURLWithPath: relative).lastPathComponent) == own { return base }
+        return base.appendingPathComponent(relative)
     }
     static func privateBinding(archiveID: UUID) async throws -> CloudArchiveBinding {
         guard let containerID else { throw CloudArchiveError.setupRequired }

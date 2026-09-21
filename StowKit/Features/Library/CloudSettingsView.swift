@@ -19,24 +19,18 @@ struct CloudSettingsView: View {
                     }
                     if library.cloudReadOnly { Text("You have read-only access to this household.").font(.caption) }
                 } else {
-                    Button("Enable iCloud…") { confirmEnable = true }
+                    if let note = library.archiveNote { Text(note).font(.caption).foregroundStyle(.secondary) }
+                    Button("Keep Archive in iCloud…") { confirmEnable = true }
                         .disabled(!library.isReady || library.cloudBusy)
                 }
-                Button("Find My iCloud Archives") { Task { await library.findCloudArchives() } }
-                    .disabled(library.cloudBusy)
-                ForEach(library.cloudArchives, id: \.zoneName) { archive in
-                    Button("Open \(archive.shared ? "shared household" : "archive") · \(archive.archiveID.uuidString.prefix(8))") {
-                        Task { await library.openCloudArchive(archive) }
-                    }
-                }
             }
-            Text("Your documents, their details, and their text sync through iCloud. Reading text and making suggestions always happen on your Mac. Documents stay on this Mac unless you remove a download.")
+            Text("StowKit keeps one archive in iCloud. Your documents, their details, and their text live there; this Mac keeps copies, reads text, and makes suggestions. Documents stay on this Mac unless you remove a download.")
                 .font(.caption).foregroundStyle(.secondary)
         }
-        .confirmationDialog("Enable iCloud for this archive?", isPresented: $confirmEnable, titleVisibility: .visible) {
-            Button("Enable iCloud") { Task { await library.connectCloud() } }
+        .confirmationDialog("Keep your archive in iCloud?", isPresented: $confirmEnable, titleVisibility: .visible) {
+            Button("Upload to iCloud") { Task { await library.connectCloud() } }
         } message: {
-            Text("This uploads this archive’s originals, metadata, and extracted text to your iCloud account. Sharing is invitation-only and configured separately.")
+            Text("This uploads this archive’s originals, details, and extracted text to your iCloud account, and reconnects it if it was there before. Sharing is invitation-only and configured separately.")
         }
         if !library.cloudConflicts.isEmpty {
             Section("Changes to Review") {

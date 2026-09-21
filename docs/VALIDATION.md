@@ -1,5 +1,35 @@
 # Validation
 
+## One archive in iCloud (unreleased)
+
+September 21, 2026, on `main` after `770fdef`. The owner found StowKit open on a second local copy
+of their own iCloud archive (sidebar "iCloud Archive"; picker "On My Mac — Stored on this Mac"),
+where a document that arrived from iCloud showed "Suggestions come after the text is read" beside
+"Text ready". Two causes, both read from code: 1.x could reopen this Mac's own zone as a separate
+copy, and a document arriving from iCloud is given the analysis state `remote`, which nothing ever
+advances and the inspector has no wording for. The owner then set the direction: one archive, in
+iCloud.
+
+Built: the archive picker and File → Switch Archive are gone; `ArchiveResolver` decides at launch
+whether to connect, upload, join, or stay local; `CloudSetup.activeRoot` ignores a remembered copy
+of this Mac's own archive; `ArchiveCopies` removes such a copy only when it is provably redundant;
+the account-change observer no longer turns iCloud off; the sidebar shows sync status.
+
+`OneArchiveTests`, 10 tests, pass: every resolver branch (including the owner's pause, the old
+disabled binding, never guessing between two zones, never merging a Mac that has documents), the
+root redirect, and copy retirement (a redundant copy is removed; one with a document the real
+archive lacks, or with unsent edits, is kept). Full suite: 124 tests, **6 failures, all in
+`ProcessingTests`**, the Vision OCR tests, each throwing
+`e5rtError("e5rt_execution_stream_operation_create_precompiled_compute_operation_with_options call failed", 13)`.
+`testVisionReadsImageAndScannedPDF` fails identically on unchanged `770fdef` in a separate worktree,
+so this is the machine's text recognition, not this change.
+
+**Not established.** Nothing here ran against the owner's real archive or live iCloud: the Debug
+build has no iCloud container, so the resolver was exercised only through its pure function. The
+join path (a second, empty Mac) is untested on a second Mac. Documents that arrived from iCloud
+still never get suggestions; that is the next step (processing claims). Household sharing still
+opens a separate local archive for a participant and is untested.
+
 ## 1.1.0 release build
 
 September 21, 2026: version 1.1.0, build 7, from `f09cc55`, built with

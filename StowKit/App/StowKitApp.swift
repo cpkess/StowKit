@@ -34,23 +34,14 @@ struct StowKitApp: App {
                     NotificationCenter.default.post(name: .stowKitSearch, object: nil)
                 }.keyboardShortcut("f")
                 Divider()
-                Menu("Switch Archive") {
-                    ForEach(library.archiveChoices) { choice in
-                        Toggle(choice.title, isOn: Binding(get: { choice.isCurrent }, set: { chosen in
-                            if chosen { Task { await library.switchArchive(to: choice) } }
-                        }))
-                    }
-                    Divider()
-                    Button("Find iCloud Archives") { Task { await library.findCloudArchives() } }
-                        .disabled(CloudSetup.containerID == nil)
-                }
+                Button("Sync Now") { library.syncNow() }.disabled(!library.cloudEnabled)
             }
         }
         Settings {
             Form {
-                Section("Local Archive") {
-                    Text("Your documents are stored on this Mac and are never changed. Opening one gives you a separate copy to edit.")
-                    Text("Documents in Trash can be restored and still use disk space. Text is read on this Mac, and suggestions come from Apple Intelligence when it is available, or from StowKit's built-in rules. iCloud is optional.")
+                Section("Archive") {
+                    Text("Your originals are never changed. Opening one gives you a separate copy to edit.")
+                    Text("Documents in Trash can be restored and still use disk space. Text is read on this Mac, and suggestions come from Apple Intelligence when it is available, or from StowKit's built-in rules.")
                         .foregroundStyle(.secondary)
                     LabeledContent("Documents", value: "\(library.statistics.documents)")
                     ArchiveUsageView(library: library)

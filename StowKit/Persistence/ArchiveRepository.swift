@@ -31,6 +31,7 @@ import SwiftData
         }
     }
 
+    func documentCount() throws -> Int { try context.fetchCount(FetchDescriptor<Record>()) }
     func documents() throws -> [HouseholdDocument] {
         try context.fetch(FetchDescriptor<Record>(sortBy: [SortDescriptor(\.importedAt, order: .reverse)])).map(\.document)
     }
