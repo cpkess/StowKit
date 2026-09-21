@@ -184,8 +184,8 @@ both places. Don't "simplify" that away.
   Use `pauseCloudTransportForSwitch()`. The picker also hides this Mac's own iCloud zone, which would
   otherwise open as a second local copy of the same archive.
 - **The owner's own iCloud archive is zone `StowKit-4017FFBA-…`** — never delete it. Two fictional
-  zones from Codex's September smoke tests (`462F692A-…`, `72CAADA2-…`) were confirmed by a dry run
-  of `ArchiveMaintenance` (see `docs/ICLOUD_SETUP.md`). Never pick zones by the picker's short name:
+  zones from Codex's September smoke tests (`462F692A-…`, `72CAADA2-…`) were deleted
+  on 2026-09-21 by `ArchiveMaintenance` (see `docs/ICLOUD_SETUP.md`); only the owner's zone remains. Never pick zones by the picker's short name:
   before the picker learns this Mac's archive ID, it lists the owner's archive among them.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.

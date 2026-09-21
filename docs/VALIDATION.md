@@ -21,7 +21,7 @@ stapling. **DMG SHA-256: `cff1fa0848412821487e6506555f562faa9458eda7b48958217404
 **Not established.** The same limits as 1.0.0, plus permanent deletion and the archive picker
 untested on a second Mac or against live deletions.
 
-## Leftover iCloud test archives identified
+## Leftover iCloud test archives identified and deleted
 
 September 21, 2026, `ArchiveMaintenance` dry run against the owner's Production iCloud. Three
 `StowKit-` zones exist. **`4017FFBA-…` is the owner's own archive**, identified from the local
@@ -34,8 +34,15 @@ This corrects an earlier claim that all three archives in the picker were test a
 picker listed the owner's archive as "iCloud Archive 4017", because it had not yet learned this
 Mac's archive ID, so choosing zones by name would have deleted the owner's iCloud copy.
 
-**Not yet done.** The delete run was blocked by this session's permission check; the owner runs
-it. The zones remain until then.
+**Deleted the same day.** The owner ran the maintenance build with `--delete` (this session's
+permission check blocked Claude's own run). Its output: mode DELETE, `KEEP StowKit-4017FFBA-…
+— this Mac's own archive`, each other zone "1 document(s); all fictional: true", then `DELETED`
+for `462F692A-…` and `72CAADA2-…`, `removed CloudValidation/`, `removed local cache
+462F692A-…`, `DONE`. A second dry run afterwards listed only `KEEP StowKit-4017FFBA-…`.
+
+**Not established.** The zones' absence was checked only through the app's own zone listing,
+not in CloudKit Console. The owner's archive still has iCloud turned off from the 1.0.0 switch
+bug; nothing here re-enabled it.
 
 ## Permanent deletion, archive picker, and iCloud-style downloads
 
@@ -76,7 +83,6 @@ being left.
   signed build but not seen on screen, because context menus need full-screen control.
 - A popover row press was not observed working, only the equivalent menu command.
 - The owner's Delete Permanently and Empty Trash buttons were not pressed on real documents.
-- The leftover test archives remain in the owner's iCloud.
 
 ## 1.0.0 release build
 
