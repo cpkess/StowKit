@@ -1,5 +1,31 @@
 # Validation
 
+## Optimized storage, step 1: disk accounting
+
+September 20, 2026: `DocumentStorageManager.usage()` walks the archive and reports allocated
+bytes split into originals, database, search index, thumbnails, in-progress transfers, and
+other, with a count of files it could not read. Settings replaces the old "Originals" line with
+this breakdown behind an explicit **Measure Disk Use** button. **No eviction exists**, and
+nothing removes or modifies an original.
+
+Two tests in `ArchiveTests` cover it, and the full suite passes **97 tests with zero failures**.
+`testUsageMeasuresDiskAndSeparatesOriginalsFromDerivedData` imports a PDF and a PNG, then
+asserts the file count, that originals are at least the recorded logical sizes, that the
+database is counted, that the categories sum to the total, that the total equals an independent
+walk of the same tree, and that both originals still exist byte-for-byte afterwards —
+measurement is a report, never a mutation. `testUsageCountsTrashedOriginalsThatStillOccupyDisk`
+asserts trashing frees nothing, which is the current behavior and the reason this work exists.
+
+The `du` acceptance gate holds: on APFS, `du -sk` over a fixture tree equalled the summed
+allocated blocks of its files exactly (16384 bytes both ways), so directories contribute
+nothing and the reported total is comparable with `du`.
+
+**Not established.** The breakdown has not been read off a real archive in the running app —
+the figures above come from tests and a fixture tree, not from Settings on a populated
+library. The reconciliation the design note describes (a recorded-size fast path checked
+against a background walk) is not built: every measurement is a full walk, taken only when the
+button is pressed.
+
 ## Vision cold-start cost measured
 
 September 20, 2026: the first `VNRecognizeTextRequest` in a process costs **46.5 s**;

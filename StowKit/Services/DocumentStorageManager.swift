@@ -100,6 +100,31 @@ actor DocumentStorageManager {
         guard try hash(file) == document.contentHash else { throw CloudArchiveError.corruptAsset }
         try? files.removeItem(at: directory)
     }
+    /// Walk the archive and report allocated bytes per category. Deliberately measures the disk
+    /// rather than summing recorded document sizes, which count documents that are trashed or
+    /// have never been downloaded. Callers treat this as a report, not as a cached value.
+    func usage() throws -> ArchiveUsage {
+        var usage = ArchiveUsage()
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .totalFileAllocatedSizeKey, .fileSizeKey]
+        guard let walker = files.enumerator(at: root, includingPropertiesForKeys: Array(keys)) else { return usage }
+        for case let url as URL in walker {
+            try Task.checkCancellation()
+            guard let values = try? url.resourceValues(forKeys: keys) else { usage.unreadable += 1; continue }
+            guard values.isRegularFile == true else { continue }
+            let bytes = Int64(values.totalFileAllocatedSize ?? values.fileSize ?? 0)
+            switch root.path.count < url.path.count
+                ? url.path.dropFirst(root.path.count).split(separator: "/").first.map(String.init) : nil {
+            case "Originals": usage.originals += bytes; usage.originalFiles += 1
+            case "Thumbnails": usage.thumbnails += bytes
+            case "Search": usage.searchIndex += bytes
+            case "Staging": usage.staging += bytes
+            case "Transfers": usage.transfers += bytes
+            case let name? where name.hasPrefix("Library.store"): usage.database += bytes
+            default: usage.other += bytes
+            }
+        }
+        return usage
+    }
     nonisolated func thumbnailURL(for id: UUID) -> URL {
         root.appendingPathComponent("Thumbnails/\(id.uuidString).png")
     }

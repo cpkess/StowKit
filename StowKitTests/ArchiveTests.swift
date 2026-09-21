@@ -290,6 +290,51 @@ import UniformTypeIdentifiers
         XCTAssertEqual(try Data(contentsOf: storage.originalURL(for: document.relativePath)), bytes)
     }
 
+    func testUsageMeasuresDiskAndSeparatesOriginalsFromDerivedData() async throws {
+        let empty = try await storage.usage()
+        XCTAssertEqual(empty.originals, 0)
+        XCTAssertEqual(empty.originalFiles, 0)
+
+        let first = try await importer.importFile(pdf("Usage One.pdf")).document
+        let second = try await importer.importFile(image(.png)).document
+        let usage = try await storage.usage()
+
+        XCTAssertEqual(usage.originalFiles, 2)
+        XCTAssertEqual(usage.unreadable, 0)
+        // Allocated size is rounded up to whole blocks, so it is at or above the logical size.
+        XCTAssertGreaterThanOrEqual(usage.originals, first.fileSize + second.fileSize)
+        XCTAssertGreaterThan(usage.database, 0, "the SwiftData store should be counted")
+        XCTAssertEqual(usage.total, usage.originals + usage.derived)
+        XCTAssertGreaterThan(usage.derived, 0, "the store and its sidecars are derived bytes")
+
+        // The total must agree with an independent walk of the same tree.
+        var walked: Int64 = 0
+        let walker = try XCTUnwrap(FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: [.isRegularFileKey, .totalFileAllocatedSizeKey]))
+        for case let url as URL in walker {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .totalFileAllocatedSizeKey])
+            if values.isRegularFile == true { walked += Int64(values.totalFileAllocatedSize ?? 0) }
+        }
+        XCTAssertEqual(usage.total, walked)
+
+        // Measuring is a report, never a mutation: both originals survive it unchanged.
+        for document in [first, second] {
+            let original = try storage.originalURL(for: document.relativePath)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: original.path))
+            XCTAssertEqual(try Data(contentsOf: original).count, Int(document.fileSize))
+        }
+    }
+
+    func testUsageCountsTrashedOriginalsThatStillOccupyDisk() async throws {
+        var document = try await importer.importFile(pdf("Usage Trash.pdf")).document
+        let before = try await storage.usage()
+        document.trashedAt = Date()
+        try repository.update(document)
+        let after = try await storage.usage()
+        XCTAssertEqual(after.originalFiles, before.originalFiles)
+        XCTAssertEqual(after.originals, before.originals, "trashing frees nothing today")
+    }
+
     private func pdf(_ name: String, width: CGFloat = 612) throws -> URL {
         let url = directory.appendingPathComponent(name)
         var box = CGRect(x: 0, y: 0, width: width, height: 792)

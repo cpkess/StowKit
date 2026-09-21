@@ -50,6 +50,9 @@ final class LibraryStore {
     private(set) var snippets: [UUID: String] = [:]
     private(set) var totalResults = 0
     private(set) var statistics = LibraryStatistics()
+    private(set) var usage: ArchiveUsage?
+    private(set) var isMeasuringUsage = false
+    private(set) var usageError: String?
     private(set) var pendingProcessingCount = 0
     private(set) var isLoadingMore = false
     private(set) var isRebuildingIndex = false
@@ -375,6 +378,19 @@ final class LibraryStore {
         pageLimit += 50
         isLoadingMore = true
         refreshTextSearch(resetLimit: false)
+    }
+    /// Measured on demand from Settings. Walking the archive is too expensive for every render,
+    /// and a stale number would be worse than an absent one, so nothing caches it.
+    func refreshUsage() {
+        guard !isMeasuringUsage else { return }
+        isMeasuringUsage = true
+        usageError = nil
+        Task {
+            do { usage = try await storage.usage() }
+            catch is CancellationError { }
+            catch { usageError = error.localizedDescription }
+            isMeasuringUsage = false
+        }
     }
     func rebuildSearchIndex() {
         guard let service = textSearchService, !isRebuildingIndex else { return }

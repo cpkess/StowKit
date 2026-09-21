@@ -84,9 +84,12 @@ path. Restoring an evicted document downloads it on demand.
 
 ## Accounting
 
-**There is no disk-usage accounting in the app today** — nothing sums file sizes, and Settings
-only shows the archive location. A budget cannot be built on what is not measured, so this
-comes first.
+Settings shows one figure labelled "Originals", from `LibraryStatistics.bytes`. That is
+`sum(bytes)` over the **search index**, so it is the recorded logical size of every document —
+including trashed documents, and including remote documents whose originals were never
+downloaded — while ignoring the database, the search index itself, thumbnails, and staging. It
+can therefore overstate and understate real disk use at the same time, and it is not a
+measurement of disk at all. A budget cannot be built on it, so honest accounting comes first.
 
 Sum the recorded `fileSize` of documents whose original exists locally. That value is
 authoritative: it is verified at import and again on download, and reading it from the store
@@ -127,6 +130,10 @@ cache browser, no per-collection rules.
 1. **Accounting only.** Usage breakdown in Settings, reconciliation, no eviction anywhere.
    Verify the reported total against `du` on a real archive, including after imports, Trash,
    and a rebuild of the search index.
+   *Implemented 2026-09-20* as `DocumentStorageManager.usage()` and `ArchiveUsageView`,
+   measured on demand rather than cached. Reconciliation is **not** built: there is no
+   recorded-size fast path yet, so every measurement is a full walk. See
+   [validation](VALIDATION.md).
 2. **Pins and manual eviction.** Wire the existing `pinned` field; add "Remove Download" and
    the derived state. Gate on every invariant above. Verify: an evicted document still
    appears, still searches, still shows its thumbnail; explicit download returns

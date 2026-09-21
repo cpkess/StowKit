@@ -40,7 +40,7 @@ struct StowKitApp: App {
                     Text("Trash is recoverable and continues to use disk space. Text extraction uses local PDF text and Vision OCR. Document understanding uses Apple’s on-device model when available, with local rules as a fallback. iCloud is optional and configured below.")
                         .foregroundStyle(.secondary)
                     LabeledContent("Documents", value: "\(library.statistics.documents)")
-                    LabeledContent("Originals", value: ByteCountFormatter.string(fromByteCount: library.statistics.bytes, countStyle: .file))
+                    ArchiveUsageView(library: library)
                     Button(library.isRebuildingIndex ? "Rebuilding Search Index…" : "Rebuild Search Index") { library.rebuildSearchIndex() }
                         .disabled(!library.isReady || library.isRebuildingIndex)
                     Text("Archive location").font(.caption).foregroundStyle(.secondary)
