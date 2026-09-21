@@ -1,5 +1,40 @@
 # Validation
 
+## macOS 27 OCR regression — not reproducible in the shipping build
+
+September 20, 2026 (later run, Claude Code): the OCR failure recorded under "Latest regression
+status after provisioning" **does not reproduce in the default ad-hoc build**. The full Debug
+suite ran **95 tests with zero failures** on macOS 27.0 (26A428), Apple M2 Max, including both
+previously failing tests. `ProcessingTests` alone ran 13 tests with zero failures. Evidence:
+`/tmp/claude-501/.../full-suite.log`, re-runnable with the standard test command in `README.md`.
+
+The recorded root cause was wrong in one specific way, and the correction matters for anyone
+re-investigating. The `e5rt` messages name **system** resources, not anything StowKit generates:
+
+```text
+[e5rt] Unable to find a valid E5 in provided path
+/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/cr_td_model_v3_e5.mlmodelc.bundle/.
+Found bundles : { }. Expected : { H14G.N301.bundle H14C.bundle ... universal.bundle jit.bundle }
+```
+
+Those directories exist but hold a flat compiled CoreML model (`coremldata.bin`, `model.mil`,
+`weights`) instead of the per-hardware sub-bundles the E5 runtime expects, so e5rt declines the
+ANE path and Vision falls back. No `com.apple.e5rt.e5bundlecache` exists under StowKit's
+container or `~/Library/Caches` at all, so there is no "StowKit generated E5 cache" to repair —
+the earlier attempt to preserve/rename one was operating on a directory that does not exist.
+The fallback is a logged warning, not a failure: the assertions on recognized text pass.
+
+Cold-start cost is real and worth knowing: the first Vision call in a fresh process took
+**46.2 seconds**; the same test warm took **0.5 seconds**. A user's first scanned import can
+therefore appear to hang for roughly a minute.
+
+**Not established.** The original failure occurred on a *provisioned* build, and that
+configuration could not be re-tested: `xcodebuild` with `Config/iCloud.local.xcconfig` fails
+before compiling with "Unable to log in with account" and no Mac App Development profile for
+`com.stowkit.tests`. Whether signing, entitlements, or the sandbox container changes Vision's
+behavior remains **unverified** and needs a re-authenticated Xcode account plus a profile for
+the test target. No OCR code was changed; no speculative workaround was added.
+
 ## Developer ID and Production CloudKit verification
 
 September 20, 2026: deployed the four StowKit record types from Development to Production in `iCloud.com.stowkit.app` under Gamergrams. Created a Developer ID provisioning profile for the existing Gamergrams certificate; it has `ProvisionsAllDevices = true` and Production iCloud entitlements.
@@ -13,6 +48,10 @@ An explicitly compiled Production runner used an isolated archive and fictional 
 Built version 0.6.0 (build 2) in Release with Gamergrams development provisioning. The compressed DMG passed `hdiutil verify`; it was mounted read-only and the contained app passed `codesign --verify --deep --strict`. Verified both arm64 and x86_64 architectures, expected version and CloudKit Development bundle settings, and the Applications installation link. The embedded development profile includes one Mac and expires September 19, 2027. This is an unnotarized development prerelease, not general public distribution. Packaging does not resolve the OCR and household acceptance limitations below.
 
 ## Latest regression status after provisioning
+
+> **Superseded in part.** The OCR diagnosis below misattributes the `e5rt` messages to a
+> StowKit-generated cache; no such cache exists. See "macOS 27 OCR regression — not
+> reproducible in the shipping build" above. The rest of this entry stands.
 
 The normal signed Release build succeeds and passes strict code-signature verification. A local copy is available at `build/iCloud-development/StowKit.app` (ignored by Git); it includes the expected container, Development environment, and sharing bundle flag. The cloud test runner is excluded from that build.
 

@@ -139,11 +139,17 @@ both places. Don't "simplify" that away.
 
 ## Known issues / traps
 
-- **OCR is currently failing on macOS 27.** Vision reports a missing `main_ane/model.anehash`
-  in the app's generated E5 cache and `e5rtError` code 13. One image/scanned-PDF processing
-  test fails. A per-stage CPU-retry workaround was tried and removed — do not reintroduce a
-  speculative fix without evidence. Original bytes and saved text are retained regardless.
-  Last full suite: 95 tests, all cloud tests passing, 2 OCR tests failing.
+- **The macOS 27 OCR failure does not reproduce in the default build** (re-tested 2026-09-20:
+  95 tests, 0 failures). The `e5rt` log lines name *system* model bundles under
+  `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, which hold flat
+  CoreML content instead of the per-hardware sub-bundles the E5 runtime wants; Vision falls
+  back and still returns correct text. There is no StowKit-generated E5 cache — the earlier
+  "app's generated cache" diagnosis was wrong. Still unverified: the failure originally
+  appeared on a *provisioned* build, which can't be re-tested until Xcode's Apple account is
+  re-authenticated and `com.stowkit.tests` has a profile. Don't add a speculative workaround;
+  one was already tried and reverted.
+- **First Vision call costs ~46s cold, ~0.5s warm.** A user's first scanned import can look
+  like a hang for about a minute. Unaddressed; a progress affordance would be the honest fix.
 - Schema V7→V8 exists only because macOS 27 exposed an inherited-property collision on a
   reserved `hash` property (renamed to `sourceHash`). Both V7 and V8 stay in the migration
   plan because a dev build already opened V7. Don't prune migration versions.
@@ -160,7 +166,8 @@ both places. Don't "simplify" that away.
 
 1. **Household sharing acceptance** — two iCloud accounts, two Macs, against the checklist in
    `docs/ICLOUD_SETUP.md`. This is the blocking gate for calling iCloud ready.
-2. **OCR recovery on macOS 27** — diagnose the Vision/ANE cache failure properly.
+2. **OCR on a provisioned build** — the only remaining unknown after the 2026-09-20 re-test.
+   Needs a re-authenticated Xcode account and a profile for `com.stowkit.tests`.
 3. **Optimized storage** (brief §21) — cloud-only/optimized/offline states, pins, conservative
    eviction, disk budget settings. Nothing is evicted today.
 4. Cloud thumbnails; extractor-version negotiation.
