@@ -176,6 +176,9 @@ both places. Don't "simplify" that away.
   have worsened it, but the freeze reproduces without them. The single-threaded test suite
   passes through them, so green tests do not clear them. `PDFView.setDocumentAnalysisEnabled:`
   exists at runtime but is not public SDK API — ask before using it.
+- **The two Vision OCR tests fail intermittently on the owner's Mac** (`e5rt` error, 1 of 4 runs on
+  2026-09-21). Save full test output to a file and read the failing test names before recording a result,
+  and never chain a commit onto a test run: once a failure slipped through into a "0 failures" record.
 - **First Vision call costs ~46s cold, ~0.08s warm**, measured in a standalone tool with no
   StowKit code — it is Apple's cost, not ours. The warm state is shared across processes but
   expires after idle, so this *recurs*; it is not a one-time first-launch charge. Extraction

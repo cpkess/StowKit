@@ -15,7 +15,15 @@ indexes rebuild from saved data on first launch.
 `FilterTests`, 4 tests, pass: every filter kind alone, filters combined with search and with a
 collection, case-insensitive tags and senders, Trash excluded, facet counts, tag rename merging and
 removal with protection, and saved views surviving a reopen. Mutation check: with the filter conditions
-left out of the query, the filter test fails. Full suite: 171 tests, 0 failures.
+left out of the query, the filter test fails.
+
+Full suite: **this entry was first committed saying "171 tests, 0 failures", which was wrong.** The run
+that preceded the commit reported 1 failure (1 unexpected); the commit command didn't stop on it and its
+output wasn't kept. Four reruns, with output saved: three had 0 failures, and one had 6, all in the two
+Vision OCR tests (`testVisionReadsImageAndScannedPDF` threw the `e5rt` text-recognition error, and
+`testMixedPDFPersistsPerPageMethodsAndSearchableText` failed because its scanned page couldn't be read).
+The lost failure was most likely that same thrown error, but that is inferred, not observed. No test
+touched by this work failed in any run.
 
 **Not established.** Not seen in the running app yet (see the V9 note above). If the search index
 cannot be written, the browse fallback ignores filters.
