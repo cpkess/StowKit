@@ -14,7 +14,13 @@ image's app passes `codesign --verify --deep --strict`, its extension `codesign 
 `spctl` and stapler validation. Appcast signed for build 10 (no Keychain prompt, reusing the approved
 `sign_update`).
 
-**Not established.** This exact binary was not launched against the owner's archive.
+Update from the *released* 1.3.0: a copy of the notarized 1.3.0 app, run from a scratch folder on
+the owner's archive, offered "StowKit 1.4.0 is now available—you have 1.3.0" from the live feed;
+Install Update downloaded, verified, installed, and relaunched it. The copy then reported 1.4.0, passed
+`codesign --verify --deep --strict` and `spctl`, contained `StowKitShare.appex`, and its executable
+matched this release build byte for byte. The copy and its extension registration were removed.
+
+**Not established.** The install was into a user-writable scratch folder, not `/Applications`.
 
 ## Share → StowKit extension (unreleased)
 
