@@ -1,5 +1,17 @@
 # Validation
 
+## 1.5.0 (11) release build
+
+September 22, 2026, owner's Mac. `scripts/build-distribution.sh` (Developer ID, Production, profile
+719e9bc1…) passed its entitlement and Info.plist checks; the app and then the signed DMG were notarized,
+stapled, and accepted by Gatekeeper (`notarize.sh`, profile AbleKit). The `.sha256` sidecar was regenerated
+after stapling and checks OK. The appcast was signed with the `stowkit` EdDSA key and its length matches the
+DMG (6,111,379 bytes). The stapled app launched on the owner's archive with its five documents, and typing
+"treasurer" then Clear Search logged no reentrancy warning (`grep -c reentrant` = 0).
+
+**Not established.** An update from 1.4.0 through Sparkle to this version was not observed at release time;
+the release notes' list of 1.5 features not yet used on a real archive still stands.
+
 ## NSTableView reentrancy warning: cause and fix (1.5.0)
 
 September 22, 2026, on the owner's Mac (macOS 27, Debug build, real archive).
