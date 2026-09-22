@@ -38,7 +38,9 @@ extension ArchiveRepository {
             "documentDate": .date(document.documentDate), "summary": .text(document.summary),
             "tags": .text(document.tags), "entities": .text(document.entities),
             "favorite": .flag(document.favorite), "review": .flag(document.needsReview),
-            "trashedAt": document.trashedAt.map { .date($0) } ?? .null
+            "trashedAt": document.trashedAt.map { .date($0) } ?? .null,
+            "documentType": .text(document.documentType), "amount": .text(document.amount),
+            "dueDate": document.dueDate.map { .date($0) } ?? .null, "expiresAt": document.expiresAt.map { .date($0) } ?? .null
         ]
         var manual = protected.union(["documentDate", "entities", "favorite", "trashedAt"])
         let key = "document:\(document.id.uuidString)"

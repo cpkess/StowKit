@@ -54,11 +54,16 @@ struct HouseholdDocument: Identifiable, Equatable, Codable, Sendable {
     let contentHash: String
     let fileSize: Int64
     let relativePath: String
+    var documentType: String = ""
+    /// As written on the document ("$3,972.96"), not a parsed number.
+    var amount: String = ""
+    var dueDate: Date?
+    var expiresAt: Date?
 
     var isImage: Bool { contentType != "com.adobe.pdf" }
     var formatLabel: String { URL(fileURLWithPath: originalFilename).pathExtension.uppercased() }
     var searchableText: String {
-        ([title, originalFilename, correspondent, summary, tags, entities,
+        ([title, originalFilename, correspondent, summary, tags, entities, documentType, amount,
           documentDate.formatted(date: .abbreviated, time: .omitted),
           documentDate.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits).locale(Locale(identifier: "en_US_POSIX")))] + collections.sorted()).joined(separator: " ")
     }

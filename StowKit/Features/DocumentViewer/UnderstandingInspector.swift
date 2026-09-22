@@ -35,9 +35,14 @@ struct UnderstandingInspector: View {
                     LabeledContent("Collection", value: result.collection.isEmpty ? "No suggestion" : result.collection)
                     LabeledContent("From", value: result.correspondent.isEmpty ? "No suggestion" : result.correspondent)
                     LabeledContent("Tags", value: result.tags.isEmpty ? "No suggestion" : result.tags.joined(separator: ", "))
+                    LabeledContent("Type", value: result.documentType.isEmpty ? "No suggestion" : result.documentType)
+                    LabeledContent("Date", value: result.issuedOn ?? "No suggestion")
+                    LabeledContent("Amount", value: result.amount ?? "No suggestion")
+                    if let due = result.dueOn { LabeledContent("Due", value: due) }
+                    if let expires = result.expiresOn { LabeledContent("Expires", value: expires) }
                     Text(result.summary).textSelection(.enabled)
                     if !result.evidence.isEmpty { Text("Based on: “\(result.evidence)”").font(.caption).textSelection(.enabled) }
-                    Text("Using these fills in each suggested field, adds the collection, and marks the document reviewed. It replaces the title, summary, sender, and tags, including any you typed.").font(.caption).foregroundStyle(.secondary)
+                    Text("Using these fills in each suggested field, adds the collection, and marks the document reviewed. It replaces the title, summary, sender, tags, type, date, and amount, including any you typed.").font(.caption).foregroundStyle(.secondary)
                     HStack {
                         Button("Cancel") { showSuggestions = false }
                         Spacer()

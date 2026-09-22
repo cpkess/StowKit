@@ -40,7 +40,9 @@ Layering is strict and deliberate — do not blur it:
 - `Persistence/` — `ArchiveRepository` (`@MainActor`, small metadata transactions only,
   `autosaveEnabled = false`, explicit save/rollback) plus `+Processing`, `+Intelligence`,
   `+Sync`, `+SyncRecovery`, `+Cloud*` extensions. Versioned schemas V1–V8 in
-  `*Schema.swift` with a migration plan.
+  `*Schema.swift` with a migration plan. V9 (1.5) gave the document record its own class,
+  `ArchiveSchemaV9.DocumentRecord`; `ArchiveSchemaV1.DocumentRecord` remains only for old versions and
+  migration tests.
 - `Services/` — actors for anything expensive: `DocumentStorageManager` (file coordination,
   chunked copy/hash, staging/promotion), `DocumentImporter`, `DocumentProcessor` (OCR
   orchestration), `DocumentIntelligenceProcessor`, `OCRService`, `TextSearchService`,
@@ -211,6 +213,8 @@ both places. Don't "simplify" that away.
   zones from Codex's September smoke tests (`462F692A-…`, `72CAADA2-…`) were deleted
   on 2026-09-21 by `ArchiveMaintenance` (see `docs/ICLOUD_SETUP.md`); only the owner's zone remains. Never pick zones by a short name: the
   1.1.0 picker listed the owner's archive as "iCloud Archive 4017".
+- **1.5 added synced fields (`documentType`, `amount`, `dueDate`, `expiresAt`) and relaxed validation:**
+  missing V9 fields are allowed, unknown fields are carried along. Macs on ≤1.4 still stall on them.
 - **Adding a synced document field breaks older Macs.** `validateIncoming` rejects any field one side
   lacks (both directions), and a different `formatVersion` is rejected too. Prefer deriving facts
   from existing fields (as `carriesOnlyImportDetails` does); if a field is unavoidable, it needs a

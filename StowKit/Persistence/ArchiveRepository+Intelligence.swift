@@ -20,6 +20,11 @@ extension ArchiveRepository {
         if old.collections != new.collections { fields.insert("collections") }
         if old.tags != new.tags { fields.insert("tags") }
         if old.needsReview != new.needsReview { fields.insert("review") }
+        if old.documentDate != new.documentDate { fields.insert("documentDate") }
+        if old.documentType != new.documentType { fields.insert("documentType") }
+        if old.amount != new.amount { fields.insert("amount") }
+        if old.dueDate != new.dueDate { fields.insert("dueDate") }
+        if old.expiresAt != new.expiresAt { fields.insert("expiresAt") }
         record.protectedFields = fields.sorted()
         if new.trashedAt != nil && ["queued", "analyzing"].contains(record.state) {
             record.state = "paused"; record.revision += 1

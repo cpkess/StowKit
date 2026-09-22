@@ -132,6 +132,8 @@ extension ArchiveRepository {
         let immutable = ["id", "contentHash", "originalFilename", "contentType", "fileSize", "importedAt"]
         for key in immutable where remote.fields[key]?.value != local.fields[key]?.value { throw SyncRecoveryError.invalidPayload }
         for (key, old) in local.fields where !key.hasPrefix("membership:") {
+            // Macs before 1.5 don't send the V9 fields; their absence means "no observation".
+            if Self.addedInV9.contains(key) && remote.fields[key] == nil { continue }
             guard let incoming = remote.fields[key], Self.sameType(old.value, incoming.value) else { throw SyncRecoveryError.invalidPayload }
         }
         for (key, value) in remote.fields {
@@ -141,10 +143,14 @@ extension ArchiveRepository {
                       let id = UUID(uuidString: String(key.dropFirst(11))) else { throw SyncRecoveryError.invalidPayload }
                 let query = FetchDescriptor<ArchiveSchemaV5.CollectionIdentity>(predicate: #Predicate { $0.id == id })
                 guard try context.fetchCount(query) == 1 else { throw SyncRecoveryError.unsupportedRecord }
-            } else if local.fields[key] == nil { throw SyncRecoveryError.invalidPayload }
+            }
+            // A field from a newer StowKit is carried along untouched rather than stalling sync.
+            // Before 1.5 this threw, which is why every Mac must update when fields are added.
             if case .date(let date) = value.value, !date.timeIntervalSince1970.isFinite { throw SyncRecoveryError.invalidPayload }
         }
     }
+
+    static let addedInV9: Set<String> = ["documentType", "amount", "dueDate", "expiresAt"]
 
     private static func sameType(_ a: SyncValue, _ b: SyncValue) -> Bool {
         switch (a, b) {
@@ -163,6 +169,10 @@ extension ArchiveRepository {
         document.favorite = try flag("favorite"); document.needsReview = try flag("review")
         guard case .date(let date) = fields["documentDate"]?.value else { throw SyncRecoveryError.invalidPayload }
         document.documentDate = date
+        if case .text(let value) = fields["documentType"]?.value { document.documentType = value }
+        if case .text(let value) = fields["amount"]?.value { document.amount = value }
+        switch fields["dueDate"]?.value { case .date(let value): document.dueDate = value; case .null: document.dueDate = nil; default: break }
+        switch fields["expiresAt"]?.value { case .date(let value): document.expiresAt = value; case .null: document.expiresAt = nil; default: break }
         switch fields["trashedAt"]?.value {
         case .date(let date): document.trashedAt = date
         case .null: document.trashedAt = nil

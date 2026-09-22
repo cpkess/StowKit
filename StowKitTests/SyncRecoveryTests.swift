@@ -17,7 +17,7 @@ import SwiftData
         let document = HouseholdDocument(id: id, archiveID: repository.archiveID, title: "Original", originalFilename: "test.pdf",
             documentDate: date, importedAt: date, modifiedAt: date, contentType: "com.adobe.pdf", contentHash: hash,
             fileSize: 4, relativePath: "Originals/\(id.uuidString.prefix(2))/\(id).pdf")
-        if legacy { repository.context.insert(ArchiveSchemaV1.DocumentRecord(document)); try repository.save() }
+        if legacy { repository.context.insert(ArchiveRepository.Record(document)); try repository.save() }
         else { try repository.insert(document) }
         return document
     }
@@ -58,7 +58,7 @@ import SwiftData
         let first = try seed(hash: "a", legacy: true)
         var bad = try seed(hash: "b", legacy: true); bad.collections = ["Broken"]
         let id = bad.id
-        let row = try XCTUnwrap(repository.context.fetch(FetchDescriptor<ArchiveSchemaV1.DocumentRecord>(predicate: #Predicate { $0.id == id })).first)
+        let row = try XCTUnwrap(repository.context.fetch(FetchDescriptor<ArchiveRepository.Record>(predicate: #Predicate { $0.id == id })).first)
         row.updateMetadata(from: bad)
         try repository.journalCollection(.init(name: "Broken", symbol: "folder"))
         let key = "collection:\(try repository.collectionIdentity("Broken"))"

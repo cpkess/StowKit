@@ -360,6 +360,8 @@ private struct DocumentRow: View {
                         Text("Reading text")
                     } else if processing?.state == .queued {
                         Text("Waiting")
+                    } else if let due = document.dueDate, due >= Calendar.current.startOfDay(for: Date()) {
+                        Text("Due \(due, format: .dateTime.month(.abbreviated).day())").foregroundStyle(.orange)
                     } else if document.needsReview {
                         Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(.orange)
                         Text("Needs review")

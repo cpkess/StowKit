@@ -3,14 +3,14 @@ import SwiftData
 
 /// Only small metadata transactions run on the main actor. File I/O belongs to storage.
 @MainActor final class ArchiveRepository {
-    typealias Record = ArchiveSchemaV1.DocumentRecord
+    typealias Record = ArchiveSchemaV9.DocumentRecord
     let container: ModelContainer
     let archiveID: UUID
     let context: ModelContext
 
     init(root: URL, joiningArchiveID: UUID? = nil) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: ArchiveSchemaV8.self)
+        let schema = Schema(versionedSchema: ArchiveSchemaV9.self)
         let configuration = ModelConfiguration("StowKit", schema: schema,
             url: root.appendingPathComponent("Library.store"), cloudKitDatabase: .none)
         container = try ModelContainer(for: schema, migrationPlan: ArchiveMigrationPlan.self, configurations: [configuration])

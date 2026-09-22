@@ -20,6 +20,10 @@ struct ExportRecord: Codable, Equatable, Sendable {
     let peopleAndThings: String
     let favorite: Bool
     let needsReview: Bool
+    var documentType = ""
+    var amount = ""
+    var dueDate: String?
+    var expiresAt: String?
 }
 
 struct ExportResult: Sendable {
@@ -114,9 +118,10 @@ actor ArchiveExporter {
         func field(_ value: String) -> String {
             value.contains(where: { ",\"\n\r".contains($0) }) ? "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\"" : value
         }
-        let header = "Title,Date,Sender,Collections,Tags,Summary,File,SHA-256,Needs Review"
+        let header = "Title,Date,Sender,Type,Amount,Due,Expires,Collections,Tags,Summary,File,SHA-256,Needs Review"
         let rows = records.map { record in
-            [record.title, record.documentDate, record.sender, record.collections.joined(separator: "; "), record.tags.joined(separator: "; "),
+            [record.title, record.documentDate, record.sender, record.documentType, record.amount, record.dueDate ?? "", record.expiresAt ?? "",
+             record.collections.joined(separator: "; "), record.tags.joined(separator: "; "),
              record.summary, record.file, record.sha256, record.needsReview ? "yes" : "no"].map(field).joined(separator: ",")
         }
         return ([header] + rows).joined(separator: "\n") + "\n"
@@ -127,7 +132,8 @@ actor ArchiveExporter {
             documentDate: day(document.documentDate), importedAt: ISO8601DateFormatter().string(from: document.importedAt),
             sender: document.correspondent, collections: document.collections.sorted(),
             tags: document.tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
-            summary: document.summary, peopleAndThings: document.entities, favorite: document.favorite, needsReview: document.needsReview)
+            summary: document.summary, peopleAndThings: document.entities, favorite: document.favorite, needsReview: document.needsReview,
+            documentType: document.documentType, amount: document.amount, dueDate: document.dueDate.map(day), expiresAt: document.expiresAt.map(day))
     }
     private static func readme(date: Date, count: Int, failures: [String]) -> String {
         var text = """

@@ -4,7 +4,7 @@ import SwiftData
 /// Construct off-main. All index I/O, backfill, and page-text reads run on this model actor.
 @ModelActor actor TextSearchService {
     typealias Page = ArchiveSchemaV2.PageTextRecord
-    typealias Record = ArchiveSchemaV1.DocumentRecord
+    typealias Record = ArchiveSchemaV9.DocumentRecord
     typealias Change = ArchiveSchemaV3.SearchChangeRecord
     typealias Job = ArchiveSchemaV2.ProcessingJobRecord
     private var index: FullTextIndex?

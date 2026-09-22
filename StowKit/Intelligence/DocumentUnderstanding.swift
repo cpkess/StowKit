@@ -19,6 +19,12 @@ struct DocumentUnderstanding: Codable, Sendable, Equatable {
     var note = ""
     /// Names of the filing rules that also applied. Optional so results saved before rules decode.
     var rules: [String]?
+    /// "yyyy-MM-dd" days and an amount as written, each checked against the text by `validated`.
+    /// Optional so results saved before 1.5 still decode.
+    var issuedOn: String?
+    var dueOn: String?
+    var expiresOn: String?
+    var amount: String?
 }
 protocol DocumentIntelligenceProvider: Sendable {
     func understand(_ input: UnderstandingInput) async throws -> DocumentUnderstanding
@@ -28,13 +34,20 @@ protocol DocumentIntelligenceProvider: Sendable {
 enum UnderstandingPolicy {
     static let automaticThreshold = 0.90
     static let filingThreshold = 0.65
-    static let fields = ["title", "summary", "correspondent", "collections", "tags", "review"]
+    static let fields = ["title", "summary", "correspondent", "collections", "tags", "review",
+                         "documentDate", "documentType", "amount", "dueDate", "expiresAt"]
     static func validated(_ proposal: DocumentUnderstanding, input: UnderstandingInput) -> DocumentUnderstanding {
         var result = proposal
         result.title = String(result.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
         result.summary = String(result.summary.prefix(600))
         result.correspondent = String(result.correspondent.prefix(120))
         result.tags = Array(Set(result.tags.map { String($0.prefix(40)) }.filter { !$0.isEmpty })).sorted().prefix(8).map { $0 }
+        result.documentType = String(result.documentType.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
+        let days = DocumentFacts.detectedDays(in: input.text)
+        result.issuedOn = DocumentFacts.supportedDay(result.issuedOn, among: days)
+        result.dueOn = DocumentFacts.supportedDay(result.dueOn, among: days)
+        result.expiresOn = DocumentFacts.supportedDay(result.expiresOn, among: days)
+        result.amount = DocumentFacts.supportedAmount(result.amount, in: input.text)
         let text = TextNormalization.searchKey(input.text)
         if !result.correspondent.isEmpty && !text.contains(TextNormalization.searchKey(result.correspondent)) { result.correspondent = "" }
         if !input.collections.contains(result.collection) || !evidenceSupported(result.evidence, by: input.text) {
@@ -62,6 +75,15 @@ enum UnderstandingPolicy {
     }
     static func merge(_ result: DocumentUnderstanding, into document: HouseholdDocument, protected: Set<String>, explicit: Bool = false) -> HouseholdDocument {
         var edited = document
+        // Dates and an amount were checked against the text in `validated`, so they are filled even
+        // when filing is uncertain; the document stays in Inbox for review either way.
+        if !protected.contains("amount"), let amount = result.amount { edited.amount = amount }
+        if !protected.contains("dueDate"), let day = result.dueOn.flatMap(DocumentFacts.date) { edited.dueDate = day }
+        if !protected.contains("expiresAt"), let day = result.expiresOn.flatMap(DocumentFacts.date) { edited.expiresAt = day }
+        // Date edits weren't tracked before 1.5, so an automatic suggestion only replaces a date
+        // that is still the import default (the import day). Accepting explicitly may replace any.
+        if !protected.contains("documentDate"), let day = result.issuedOn.flatMap(DocumentFacts.date),
+           explicit || Calendar.current.isDate(document.documentDate, inSameDayAs: document.importedAt) { edited.documentDate = day }
         guard explicit || result.confidence >= filingThreshold else {
             if !protected.contains("review") { edited.needsReview = true }
             return edited
@@ -71,6 +93,7 @@ enum UnderstandingPolicy {
         if !protected.contains("correspondent") && !result.correspondent.isEmpty { edited.correspondent = result.correspondent }
         if !protected.contains("collections") && !result.collection.isEmpty { edited.collections.insert(result.collection) }
         if !protected.contains("tags") && !result.tags.isEmpty { edited.tags = result.tags.joined(separator: ", ") }
+        if !protected.contains("documentType") && !result.documentType.isEmpty { edited.documentType = result.documentType }
         if !protected.contains("review") { edited.needsReview = explicit ? false : result.confidence < filingThreshold }
         return edited
     }

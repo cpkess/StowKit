@@ -1,5 +1,34 @@
 # Validation
 
+## Dates, amounts, and document types (unreleased)
+
+September 21, 2026. Schema V9 adds `documentType`, `amount` (as written), `dueDate`, and `expiresAt`
+to the document record (lightweight migration; defaults fill old rows). The model now proposes an
+issue date, due date, expiry date, and amount; `DocumentFacts` keeps a date only if macOS's
+`NSDataDetector` finds that same day in the text, and an amount only if its digits appear there. The
+built-in rules read a date only when it follows a label such as "Date:" or "Invoice date". Verified
+facts fill unprotected fields even when filing is uncertain; the type needs filing confidence. The
+document date is replaced automatically only while it is still the import day (date edits weren't
+tracked as protected before 1.5); Use Suggestions may replace it. Editing any of these fields now
+protects it. The details pane has Type, Amount, Due, and Expires; the list shows "Due <date>"; search
+and the export manifest include them.
+
+Sync: the four fields travel in the document record. A record from an older Mac, without them, now
+applies ("no observation"); a field unknown to this version is carried along instead of rejected.
+**Macs on 1.4 or earlier still reject the new fields and stop syncing until they update.**
+
+`DocumentFactsTests`, 9 tests, pass: date and amount checks, labeled dates, an invented date and amount
+dropped, the import-default rule (and explicit acceptance overriding it), type needing confidence,
+edits protecting the fields, a V8 archive with a document opening as V9 and saving the new fields, and
+records from older and newer Macs both applying. Mutation check: without the older-Mac allowance the
+sync test fails with `invalidPayload`. Two `SyncRecoveryTests` inserted a V1 record into the live
+archive to simulate a legacy document; they now insert the current record type. Full suite: 167 tests,
+0 failures.
+
+**Not established.** Not run against the owner's archive: opening it with V9 migrates it one way, after
+which 1.4 and earlier can no longer open it, so that needs the owner's go-ahead. No model output with
+the new fields has been observed on real documents yet.
+
 ## Export (unreleased)
 
 September 21, 2026. File → Export Archive… (⇧⌘E; also in Settings) writes a new folder, readable

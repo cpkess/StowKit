@@ -70,7 +70,7 @@ import CryptoKit
         }
         XCTAssertFalse(records.contains { $0.title == "Thrown away" })
         let csv = try String(contentsOf: result.folder.appendingPathComponent("manifest.csv"), encoding: .utf8)
-        XCTAssertTrue(csv.hasPrefix("Title,Date,Sender,Collections,Tags,Summary,File,SHA-256,Needs Review\n"))
+        XCTAssertTrue(csv.hasPrefix("Title,Date,Sender,Type,Amount,Due,Expires,Collections,Tags,Summary,File,SHA-256,Needs Review\n"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.folder.appendingPathComponent("README.txt").path))
     }
     func testACorruptedOriginalIsReportedAndLeftOut() async throws {

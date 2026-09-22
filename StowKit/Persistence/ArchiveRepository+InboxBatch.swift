@@ -43,6 +43,11 @@ extension ArchiveRepository {
             if !result.correspondent.isEmpty { fields.insert("correspondent") }
             if !result.collection.isEmpty { fields.insert("collections") }
             if !result.tags.isEmpty { fields.insert("tags") }
+            if !result.documentType.isEmpty { fields.insert("documentType") }
+            if result.amount != nil { fields.insert("amount") }
+            if result.dueOn != nil { fields.insert("dueDate") }
+            if result.expiresOn != nil { fields.insert("expiresAt") }
+            if result.issuedOn != nil { fields.insert("documentDate") }
             job.protectedFields = fields.sorted()
         }
         try update(UnderstandingPolicy.merge(result, into: document, protected: [], explicit: true))

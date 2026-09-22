@@ -67,6 +67,21 @@ struct DocumentDetailView: View {
                                     DatePicker("Date", selection: $document.documentDate, displayedComponents: .date).labelsHidden()
                                 }
                                 field("From") { TextField("Who sent or issued it", text: $document.correspondent) }
+                                field("Type") {
+                                    HStack(spacing: 12) {
+                                        TextField("Bill, policy, receipt…", text: $document.documentType)
+                                        Text("Amount").foregroundStyle(.secondary)
+                                        TextField("As written", text: $document.amount).frame(maxWidth: 140)
+                                    }
+                                }
+                                field("Due") {
+                                    HStack(spacing: 12) {
+                                        OptionalDateField(date: $document.dueDate, label: "due date")
+                                        Text("Expires").foregroundStyle(.secondary)
+                                        OptionalDateField(date: $document.expiresAt, label: "expiry date")
+                                        Spacer()
+                                    }
+                                }
                                 field("Collections") { collectionsControl }
                                 field("Tags") { TextField("Separate tags with commas", text: $document.tags) }
                                 field("Summary") { TextField("A sentence about this document", text: $document.summary, axis: .vertical) }
@@ -278,5 +293,23 @@ private struct DocumentPreview: View {
         guard !Task.isCancelled, index == pageIndex else { return }
         guard let decoded = NSImage(data: data) else { throw ArchiveError.invalidDocument }
         pageImage = decoded
+    }
+}
+
+/// A date that may be absent: "Add" when empty, a picker with a clear button when set.
+struct OptionalDateField: View {
+    @Binding var date: Date?
+    let label: String
+    var body: some View {
+        if let value = date {
+            HStack(spacing: 4) {
+                DatePicker(label, selection: Binding(get: { value }, set: { date = $0 }), displayedComponents: .date).labelsHidden()
+                Button { date = nil } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary).help("Remove the \(label)")
+            }
+        } else {
+            Button("Add") { date = Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3600) }
+                .buttonStyle(.borderless).help("Add a \(label)")
+        }
     }
 }
