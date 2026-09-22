@@ -22,6 +22,7 @@ struct DocumentDetailView: View {
     var review: InboxReview? = nil
     var related: ((HouseholdDocument) async -> [(document: HouseholdDocument, shared: [String])])? = nil
     var openDocument: ((UUID) -> Void)? = nil
+    var reminders: ReminderActions? = nil
     @State private var showDetails = true
     @State private var showMore = false
     @State private var quickLookURL: URL?
@@ -88,6 +89,9 @@ struct DocumentDetailView: View {
                                 field("Tags") { TextField("Separate tags with commas", text: $document.tags) }
                                 field("Summary") { TextField("A sentence about this document", text: $document.summary, axis: .vertical) }
                             }.textFieldStyle(.roundedBorder).font(.subheadline)
+                            if let reminders, document.trashedAt == nil, document.dueDate != nil || document.expiresAt != nil {
+                                UpcomingRow(document: document, actions: reminders)
+                            }
                             if let related, let openDocument, !document.entityList.isEmpty {
                                 RelatedDocumentsView(document: document, load: related, open: openDocument)
                             }

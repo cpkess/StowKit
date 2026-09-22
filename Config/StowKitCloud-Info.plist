@@ -4,6 +4,7 @@
     <key>StowKitCloudContainer</key><string>$(STOWKIT_CLOUD_CONTAINER)</string>
     <key>StowKitCloudEnvironment</key><string>$(STOWKIT_CLOUD_ENVIRONMENT)</string>
     <key>CKSharingSupported</key><true/>
+    <key>NSRemindersFullAccessUsageDescription</key><string>StowKit adds a reminder for a document’s due or renewal date when you click Add Reminder.</string>
     <key>SUFeedURL</key><string>https://github.com/cpkess/StowKit/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key><string>7zUnD+kGx0q1//PpC9jcgxRlBom2CuKp9J6mJo/nU3Q=</string>
     <key>SUEnableInstallerLauncherService</key><true/>

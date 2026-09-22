@@ -169,6 +169,9 @@ final class FullTextIndex {
         case .overdue: sql.append("d.due IS NOT NULL AND d.due<?"); values.append(String(today))
         case .dueSoon: sql.append("d.due IS NOT NULL AND d.due>=? AND d.due<?"); values += [String(today), String(today + 31 * 86_400)]
         case .expiringSoon: sql.append("d.expires IS NOT NULL AND d.expires>=? AND d.expires<?"); values += [String(today), String(today + 91 * 86_400)]
+        case .soon:
+            sql.append("((d.due IS NOT NULL AND d.due<?) OR (d.expires IS NOT NULL AND d.expires>=? AND d.expires<?))")
+            values += [String(today + 91 * 86_400), String(today), String(today + 91 * 86_400)]
         case nil: break
         }
         if filter.noCollection { sql.append("NOT EXISTS (SELECT 1 FROM collections c WHERE c.documentID=d.id)") }

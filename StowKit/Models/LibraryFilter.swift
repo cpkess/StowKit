@@ -26,12 +26,13 @@ struct LibraryFilter: Codable, Equatable, Hashable, Sendable {
         }
     }
     enum Upcoming: String, Codable, Hashable, Sendable, CaseIterable {
-        case overdue, dueSoon, expiringSoon
+        case overdue, dueSoon, expiringSoon, soon
         var label: String {
             switch self {
             case .overdue: "Overdue"
             case .dueSoon: "Due in the next 30 days"
             case .expiringSoon: "Expiring in the next 90 days"
+            case .soon: "Upcoming (overdue, or due or expiring within 90 days)"
             }
         }
     }

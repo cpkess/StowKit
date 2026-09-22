@@ -1,5 +1,22 @@
 # Validation
 
+## Reminders and Upcoming (unreleased)
+
+September 21, 2026. A document with a due or expiry date shows "Due <date> · Add Reminder" (and the same
+for Expires) in its details. Nothing is created until the owner clicks: then StowKit asks macOS for
+Reminders access (first time only), adds a reminder to the default list for 9 AM that day, titled
+"Due: <title>" or "Renew or replace: <title>", with sender and amount in the notes, and remembers it per Mac
+so the row reads "Reminder added". A sidebar Upcoming entry shows documents overdue, or due or expiring
+within 90 days. New: the `personal-information.calendars` entitlement and a Reminders usage string in both
+builds.
+
+`ReminderTests`, 2 tests, pass: the reminder's wording, notes, date, and 9 AM time, no expiry reminder
+without an expiry date, and Upcoming including exactly the overdue, due-soon, and expiring-soon documents.
+Full suite: 184 tests, 0 failures (output saved and read). Version is now 1.5.0 (11) in both targets.
+
+**Not established.** No reminder has been created: that needs the owner's Reminders permission and writes
+to their real Reminders, so no test does it. EventKit behavior in the sandboxed, signed app is unverified.
+
 ## People & things, and related documents (unreleased)
 
 September 21, 2026. The existing, already-synced "People & things" field is now treated as a list, like

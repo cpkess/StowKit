@@ -32,6 +32,7 @@ final class LibraryStore {
     private(set) var facets = LibraryFacets()
     private(set) var savedViews: [SavedView] = []
     private(set) var entityKinds: [String: EntityKind] = [:]
+    private(set) var addedReminders: [String: String] = [:]
     var errorMessage: String?
     var cloudStatus = "iCloud is off"
     var cloudHasError = false
@@ -226,6 +227,21 @@ final class LibraryStore {
         catch { errorMessage = "Your saved views could not be saved.\n\n\(error.localizedDescription)" }
     }
     func showTag(_ tag: String) { destination = .recent; search = ""; filter = LibraryFilter(tag: tag) }
+    func showUpcoming() { destination = .recent; search = ""; filter = LibraryFilter(upcoming: .soon); newestFirst = true }
+    func hasReminder(_ id: UUID, _ kind: ReminderDraft.Kind) -> Bool { addedReminders["\(id):\(kind.rawValue)"] != nil }
+    /// Only on the owner's click; macOS asks for Reminders access the first time.
+    func addReminder(for document: HouseholdDocument, kind: ReminderDraft.Kind) {
+        guard let draft = ReminderDraft.make(for: document, kind: kind) else { return }
+        Task {
+            do {
+                let identifier = try await ReminderService.add(draft)
+                var added = addedReminders
+                added["\(document.id):\(kind.rawValue)"] = identifier
+                try? repository?.saveAddedReminders(added)
+                addedReminders = added
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
     func showEntity(_ name: String) { destination = .recent; search = ""; filter = LibraryFilter(entity: name) }
     func kind(of entity: String) -> EntityKind? { entityKinds[entity.lowercased()] }
     func setKind(_ kind: EntityKind?, for entity: String) {
@@ -391,6 +407,7 @@ final class LibraryStore {
             filingRules = (try? repository.filingRules()) ?? []
             savedViews = (try? repository.savedViews()) ?? []
             entityKinds = (try? repository.entityKinds()) ?? [:]
+            addedReminders = (try? repository.addedReminders()) ?? [:]
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
             do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }

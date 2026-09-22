@@ -32,6 +32,8 @@ struct LibraryView: View {
                         .tag(LibraryDestination.inbox)
                     Label("Recent", systemImage: "clock").tag(LibraryDestination.recent)
                     Label("Favorites", systemImage: "star").tag(LibraryDestination.favorites)
+                    Button { library.showUpcoming() } label: { Label("Upcoming", systemImage: "calendar.badge.clock") }
+                        .buttonStyle(.plain).help("Overdue, or due or expiring within 90 days")
                 }
                 Section("Collections") {
                     ForEach(library.collections) { collection in
@@ -195,7 +197,8 @@ struct LibraryView: View {
                     removeDownload: { library.removeDownload(document.id) },
                     deletePermanently: { pendingDeletion = [document.id] },
                     review: library.inboxReview(for: document.id),
-                    related: { await library.related(to: $0) }, openDocument: { library.showDocument($0) })
+                    related: { await library.related(to: $0) }, openDocument: { library.showDocument($0) },
+                    reminders: ReminderActions(has: { library.hasReminder(document.id, $0) }, add: { library.addReminder(for: document, kind: $0) }))
                     .id(document.id)
                     // iCloud connects after launch; re-derive when it does so the controls appear.
                     .task(id: "\(document.id)|\(library.cloudEnabled)|\(library.cloudReadOnly)|\(library.cloudAccessSuspended)") {

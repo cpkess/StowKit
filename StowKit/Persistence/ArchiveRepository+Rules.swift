@@ -60,6 +60,12 @@ extension ArchiveRepository {
     func entityKinds() throws -> [String: EntityKind] { try storedJSON(Self.entityKindsKey) ?? [:] }
     func saveEntityKinds(_ kinds: [String: EntityKind]) throws { try storeJSON(kinds, Self.entityKindsKey) }
 
+    // MARK: Reminders already added from this Mac ("<document id>:<due|expires>" → reminder id)
+
+    private static let remindersKey = "reminders-v1"
+    func addedReminders() throws -> [String: String] { try storedJSON(Self.remindersKey) ?? [:] }
+    func saveAddedReminders(_ reminders: [String: String]) throws { try storeJSON(reminders, Self.remindersKey) }
+
     /// Per-Mac settings kept as JSON in a checkpoint row: no schema change, not synced.
     private func storedJSON<T: Decodable>(_ key: String) throws -> T? {
         guard let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first,

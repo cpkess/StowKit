@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.4.0, build 10 (released 2026-09-21). The app icon is
+- Deployment target macOS 14.0. Current version 1.5.0, build 11 (unreleased; 1.4.0 released 2026-09-21). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
@@ -247,7 +247,7 @@ uploads, reviews and searches, and acts as an edge processor for files a phone d
 Phone input: an iCloud Drive "StowKit Inbox" folder first, an iOS companion later. Build order:
 (a) one archive — done, see VALIDATION; (b) documents from iCloud that were never understood get suggestions on
 the Mac that has their text — done, grace-period rule, no claims yet; (c) the iCloud Drive
-inbox — done (`InboxFolder`, Settings → Inbox Folder); (d) paperless parity: filing rules — done, per Mac (`FilingRule`, `ArchiveRepository+Rules`); still to do: saved views, custom fields, bulk edit, export. Rule sync is safe to add once every Mac runs ≥1.3, which skips unknown record types into CloudState instead of stalling.
+inbox — done (`InboxFolder`, Settings → Inbox Folder); (d) paperless parity: filing rules, export, dates/amounts/types (V9), filters and saved views, the paperless-ngx importer, multi-select editing, people & things with related documents, and reminders — all built for 1.5.0, see VALIDATION for what each has and hasn't been tried on. Rule sync is safe to add once every Mac runs ≥1.3, which skips unknown record types into CloudState instead of stalling.
 
 Earlier list, roughly in the order Codex intended:
 
