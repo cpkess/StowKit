@@ -193,9 +193,11 @@ both places. Don't "simplify" that away.
 - **Collection evidence is compared by words, not characters.** The model reflows its quotes
   (spacing, punctuation, words joined across lines); an exact match rejected 3 of 4 correct
   collections on the owner's documents. See `UnderstandingPolicy.evidenceSupported`.
-- **Open: an NSTableView reentrancy warning** ("will become an assert") when the document list grows back
-  while a document is selected (clearing a search or a filter chip). Logged once per launch, so test one
-  action per fresh launch with `open --stderr`. Cause not yet identified.
+- **Growing a SwiftUI `List` in place logs an NSTableView reentrancy warning** ("will become an assert")
+  when rows are inserted above one already shown — a 40-line standalone SwiftUI app does it too. The
+  library list is `.id(library.listIdentity)`, which changes in the same update as a new query's results;
+  don't key it on `search` (changes before results arrive) or drop it. Test one action per fresh launch
+  with `open --stderr`: AppKit logs it once per launch.
 - **Check for a second running instance** (`pgrep -lf StowKit.app`) after quitting test builds:
   `osascript quit` once stopped only one of two, leaving both on the same archive and iCloud.
 - Confidence-based filing is a conservative heuristic, not a calibrated probability. Analysis

@@ -1,5 +1,33 @@
 # Validation
 
+## NSTableView reentrancy warning: cause and fix (1.5.0)
+
+September 22, 2026, on the owner's Mac (macOS 27, Debug build, real archive).
+
+- **Cause: SwiftUI's `List`, not StowKit code.** Bisecting the library list down to a bare `List { ForEach
+  { Text } }`, with no selection, row view, context menu, filter bar, sidebar extras, or animation, still
+  logged it. A `ScrollView` + `LazyVStack` in its place did not. A standalone 40-line SwiftUI app (a
+  `List` of five items filtered by a search, built with `swiftc`, no StowKit code) logged the same warning
+  when its list grew from one row back to five. In that app: shrinking did not log it; growing back when
+  the remaining row was the *first* one did not; appending rows (Load More) did not; inserting one row at
+  the top did not; growing when rows are inserted above a row already shown did. `.id(items.count)`
+  avoided it; `.id(search)` did not, because the id changed before the results arrived.
+- **Fix:** `LibraryStore.listIdentity` changes in the same update that delivers a *different* query's
+  results (search text, destination, filter, sort), and the list is `.id(listIdentity)`, so a new query
+  gets a new table. Refreshes of the same query and Load More keep the table. Rows' search layout now
+  follows the results on screen (`showingSearchResults`) rather than the search field, which also covers
+  what the old `.id(search.isEmpty)` rebuild was for.
+- **Checked on the real archive**, one action per fresh launch with `open --stderr`: typing "treasurer"
+  then Clear Search: `grep -c reentrant` = 0 (it was 1 on every earlier run, including bisect builds);
+  People & Things → Wood County Treasurer, then removing the chip: 0. The list came back to five rows,
+  selection kept, no overlapping rows.
+- **Tests:** full hosted suite, 184 tests, 0 failures (output saved and read).
+
+**Not established.** Other ways a list can grow in place under the same query (a sync bringing several
+documents that sort above a shown one) were not tried and could still log the warning once; the
+standalone app suggests a single insert does not. This is a workaround for AppKit/SwiftUI behaviour, not
+a change Apple has confirmed.
+
 ## 1.5.0 (11) signed test build on the owner's archive
 
 September 22, 2026, with the owner's go-ahead (the V9 migration is one way). 1.4.0 was quit (no second
@@ -21,7 +49,7 @@ instance) and the signed 1.5.0 test build launched with `open --stderr`:
 
 **Not established.** Export was not run on the real archive: its folder picker needs full-screen control,
 and the approval timed out. No reminder was created, no paperless export imported, and multi-select, saved
-views, and tag renaming were not exercised here. The reentrancy cause is not identified.
+views, and tag renaming were not exercised here. The reentrancy warning is resolved in the entry above.
 
 ## Reminders and Upcoming (unreleased)
 

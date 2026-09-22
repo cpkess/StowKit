@@ -81,6 +81,14 @@ final class LibraryStore {
     @ObservationIgnored private var processor: DocumentProcessor?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var searchGeneration = 0
+    /// Changes in the same update that brings a different query's results, so the list gets a
+    /// fresh table. Growing a SwiftUI List in place, with rows inserted above one already shown,
+    /// makes AppKit log a reentrant NSTableView delegate call (a 40-line SwiftUI app does it too).
+    private(set) var listIdentity = 0
+    /// Whether the rows on screen are search results; it follows the results, not the search field.
+    private(set) var showingSearchResults = false
+    @ObservationIgnored private var shownQuery: ShownQuery?
+    private struct ShownQuery: Equatable { let text: String, destination: LibraryDestination?, filter: LibraryFilter, newestFirst: Bool }
     @ObservationIgnored private let processingEnabled: Bool
     let storage: DocumentStorageManager
     let thumbnails: ThumbnailService
@@ -866,6 +874,7 @@ final class LibraryStore {
                 try await Task.sleep(for: .milliseconds(150))
                 let page = try await service.search(query, destination: scope, filter: narrowing, newestFirst: sort, limit: limit)
                 guard !Task.isCancelled, searchGeneration == generation else { return }
+                show(ShownQuery(text: query, destination: scope, filter: narrowing, newestFirst: sort))
                 documents = page.hits.map(\.document)
                 if documents.contains(where: { $0.id == selectedOverride?.id }) { selectedOverride = nil }
                 snippets = Dictionary(uniqueKeysWithValues: page.hits.map { ($0.document.id, $0.snippet) })
@@ -883,6 +892,7 @@ final class LibraryStore {
                 isLoadingMore = false
                 if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                    let page = try? await service.browse(destination: scope, newestFirst: sort, limit: limit), searchGeneration == generation {
+                    show(ShownQuery(text: query, destination: scope, filter: narrowing, newestFirst: sort))
                     documents = page.hits.map(\.document)
                     snippets = [:]
                     totalResults = page.total
@@ -896,6 +906,13 @@ final class LibraryStore {
                 textSearchError = "Search unavailable. \(error.localizedDescription) Use Rebuild Search Index in Settings to try again."
             }
         }
+    }
+
+    private func show(_ query: ShownQuery) {
+        guard query != shownQuery else { return }
+        shownQuery = query
+        listIdentity += 1
+        showingSearchResults = !query.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func acceptDrop(_ providers: [NSItemProvider]) -> Bool {

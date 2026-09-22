@@ -95,7 +95,7 @@ struct LibraryView: View {
                 } else {
                     List(selection: $library.selectedIDs) {
                         ForEach(library.visibleDocuments) { document in
-                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", searching: !library.search.isEmpty, analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
+                            DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", searching: library.showingSearchResults, analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
                                 .contextMenu {
                                     Button(document.favorite ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
                                         library.toggleFavorite(document.id)
@@ -123,8 +123,9 @@ struct LibraryView: View {
                             library.bulkEdit(ids) { $0.trashedAt = Date() }
                         }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
-                    // Row heights differ only between browsing and searching; rebuild when that flips.
-                    .id(library.search.isEmpty)
+                    // A new query gets a new table: row heights differ between browsing and searching,
+                    // and growing the table in place trips AppKit's reentrancy warning.
+                    .id(library.listIdentity)
                 }
                 if library.destination == .inbox && !library.visibleDocuments.isEmpty && library.search.isEmpty {
                     Button { library.showOrganizeInbox = true } label: { Label("Organize Inbox…", systemImage: "wand.and.stars") }
