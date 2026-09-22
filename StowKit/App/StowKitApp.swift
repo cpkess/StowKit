@@ -42,6 +42,8 @@ struct StowKitApp: App {
                 Divider()
                 Button("Organize Inbox…") { library.destination = .inbox; library.showOrganizeInbox = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift]).disabled(!library.isReady || library.inboxCount == 0)
+                Button("Export Archive…") { library.exportArchive() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(!library.isReady || library.exportProgress != nil)
                 Button("Sync Now") { library.syncNow() }.disabled(!library.cloudEnabled)
             }
         }
@@ -54,6 +56,9 @@ struct StowKitApp: App {
                             .foregroundStyle(.secondary)
                         LabeledContent("Documents", value: "\(library.statistics.documents)")
                         ArchiveUsageView(library: library)
+                        Button("Export Archive…") { library.exportArchive() }.disabled(!library.isReady || library.exportProgress != nil)
+                        Text("Export writes every document, its text, and a manifest to a folder you choose, readable without StowKit. iCloud keeps your Macs in step but is not a backup: a deletion syncs too. Export regularly, or keep Time Machine on.")
+                            .font(.caption).foregroundStyle(.secondary)
                         Button(library.isRebuildingIndex ? "Rebuilding Search Index…" : "Rebuild Search Index") { library.rebuildSearchIndex() }
                             .disabled(!library.isReady || library.isRebuildingIndex)
                         Text("Archive location").font(.caption).foregroundStyle(.secondary)

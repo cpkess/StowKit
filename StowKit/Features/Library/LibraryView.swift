@@ -131,6 +131,14 @@ struct LibraryView: View {
                     Button(library.isLoadingMore ? "Loading…" : "Load More") { library.loadMore() }
                         .disabled(library.isSearchingText).padding(8)
                 }
+                if let progress = library.exportProgress {
+                    HStack(spacing: 8) {
+                        ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 60)
+                        Text("Exporting \(progress.done) of \(progress.total)").lineLimit(1)
+                        Spacer()
+                        Button("Stop") { library.cancelExport() }.buttonStyle(.borderless)
+                    }.font(.caption).foregroundStyle(.secondary).padding(10)
+                }
                 if library.pendingProcessingCount > 0 {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
@@ -230,6 +238,14 @@ struct LibraryView: View {
             searchFocused = true
         }
         .sheet(isPresented: $library.showOrganizeInbox) { OrganizeInboxView(library: library) }
+        .alert("Export Finished", isPresented: Binding(get: { library.exportResult != nil }, set: { if !$0 { library.exportResult = nil } })) {
+            Button("Show in Finder") { if let folder = library.exportResult?.folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) }; library.exportResult = nil }
+            Button("OK", role: .cancel) { library.exportResult = nil }
+        } message: {
+            if let result = library.exportResult {
+                Text("\(result.exported) \(result.exported == 1 ? "document was" : "documents were") exported and verified against their originals." + (result.failures.isEmpty ? "" : " \(result.failures.count) couldn’t be exported; README.txt in the folder lists them."))
+            }
+        }
         .confirmationDialog("Keep your archive in iCloud?", isPresented: $library.cloudProposal, titleVisibility: .visible) {
             Button("Upload to iCloud") { Task { await library.connectCloud() } }
             Button("Not Now", role: .cancel) {}

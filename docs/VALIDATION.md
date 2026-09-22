@@ -1,5 +1,27 @@
 # Validation
 
+## Export (unreleased)
+
+September 21, 2026. File → Export Archive… (⇧⌘E; also in Settings) writes a new folder, readable
+without StowKit: `Documents/<collection>/<yyyy-MM-dd> <title>.<ext>` (first collection alphabetically,
+`Unfiled` for none; clashes numbered), `Text/` with the extracted text, `manifest.json` and
+`manifest.csv` (title, date, sender, all collections, tags, summary, SHA-256…), and `README.txt`.
+Trash is excluded. Originals only in iCloud are downloaded first. Each copy is streamed through SHA-256
+and removed unless it matches the recorded fingerprint; failures are listed in the README and the
+finished alert. The folder is named `.partial` until complete. Progress shows in the list footer
+with Stop.
+
+`ExportTests`, 4 tests, pass: layout, text, manifest (all collections kept, tags split), every exported
+file re-hashed against the manifest, Trash left out, CSV quoting, safe and numbered names, and a
+corrupted original reported and left out. Mutation check: with the fingerprint comparison removed,
+the corruption test fails (2 exported, 0 failures). The corruption must keep the file's size: a
+different-sized file is already refused by `localOriginal`'s size check, which first masked the
+mutation. Full suite: 158 tests, 0 failures.
+
+**Not established.** No export of the owner's real archive yet (the folder picker is a system panel
+that background UI control can't drive). Time Machine coverage of the sandbox container is stated in
+Settings as advice, not tested.
+
 ## 1.4.0 release build
 
 September 21, 2026: version 1.4.0, build 10, from `f304ac9`. Before release the owner reported that

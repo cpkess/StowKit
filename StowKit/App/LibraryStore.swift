@@ -84,6 +84,9 @@ final class LibraryStore {
     private(set) var filingRules: [FilingRule] = []
     private(set) var rulesMessage = ""
     private(set) var organizeItems: [InboxBatchItem] = []
+    private(set) var exportProgress: (done: Int, total: Int)?
+    var exportResult: ExportResult?
+    @ObservationIgnored private var exportTask: Task<Void, Never>?
     var isOrganizingInbox = false
     var showOrganizeInbox = false
 
@@ -561,6 +564,39 @@ final class LibraryStore {
             if processingEnabled { intelligenceProcessor?.start() }
         } catch { errorMessage = error.localizedDescription }
     }
+    // MARK: Export
+
+    /// Everything outside Trash, as plain files in a folder the owner picks. See `ArchiveExporter`.
+    func exportArchive() {
+        guard let repository, let reader = textSearchService, exportTask == nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+        panel.message = "StowKit writes a new “StowKit Export” folder here with every document outside Trash, its text, and a manifest."
+        guard panel.runModal() == .OK, let parent = panel.url else { return }
+        let documents: [HouseholdDocument]
+        do { documents = try repository.documents().filter { $0.trashedAt == nil } }
+        catch { errorMessage = error.localizedDescription; return }
+        let exporter = ArchiveExporter(storage: storage, reader: reader)
+        exportProgress = (0, documents.count)
+        exportTask = Task { [weak self] in
+            let scoped = parent.startAccessingSecurityScopedResource()
+            defer { if scoped { parent.stopAccessingSecurityScopedResource() } }
+            do {
+                let result = try await exporter.export(documents, into: parent) { done, total in
+                    await MainActor.run { self?.exportProgress = (done, total) }
+                }
+                self?.exportResult = result
+            } catch is CancellationError {
+                self?.errorMessage = "Export stopped. The unfinished folder ends in “.partial”; it can be deleted."
+            } catch {
+                self?.errorMessage = "The export couldn’t finish. The unfinished folder ends in “.partial”.\n\n\(error.localizedDescription)"
+            }
+            self?.exportProgress = nil; self?.exportTask = nil
+        }
+    }
+    func cancelExport() { exportTask?.cancel() }
+
     // MARK: Organize Inbox (batch)
 
     func refreshOrganizeItems() { organizeItems = (try? repository?.inboxBatchItems()) ?? [] }
