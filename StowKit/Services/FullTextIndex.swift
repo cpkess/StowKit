@@ -19,14 +19,15 @@ final class FullTextIndex {
             try execute("PRAGMA journal_mode=WAL")
             try execute("PRAGMA synchronous=FULL")
             try execute("CREATE TABLE IF NOT EXISTS info (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-            // ":2" added filter columns and the tags table (1.5); a changed identity rebuilds from saved data.
-            let identity = archiveID.uuidString + ":2"
+            // ":2" added filter columns and tags, ":3" entities (1.5); a changed identity rebuilds from saved data.
+            let identity = archiveID.uuidString + ":3"
             let oldIdentity = try rows("SELECT value FROM info WHERE key='identity'").first?.first
             if oldIdentity != identity {
                 try execute("DROP TABLE IF EXISTS content")
                 try execute("DROP TABLE IF EXISTS documents")
                 try execute("DROP TABLE IF EXISTS collections")
                 try execute("DROP TABLE IF EXISTS tags")
+                try execute("DROP TABLE IF EXISTS entities")
                 try execute("DELETE FROM info")
             }
             try execute("CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, title TEXT NOT NULL, imported REAL NOT NULL, bytes INTEGER NOT NULL, trashed INTEGER NOT NULL, favorite INTEGER NOT NULL, inbox INTEGER NOT NULL, sender TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', dated REAL NOT NULL DEFAULT 0, due REAL, expires REAL)")
@@ -36,6 +37,8 @@ final class FullTextIndex {
             try execute("CREATE INDEX IF NOT EXISTS collection_document ON collections(documentID)")
             try execute("CREATE TABLE IF NOT EXISTS tags (documentID TEXT NOT NULL, key TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(key, documentID))")
             try execute("CREATE INDEX IF NOT EXISTS tag_document ON tags(documentID)")
+            try execute("CREATE TABLE IF NOT EXISTS entities (documentID TEXT NOT NULL, key TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY(key, documentID))")
+            try execute("CREATE INDEX IF NOT EXISTS entity_document ON entities(documentID)")
             try execute("CREATE VIRTUAL TABLE IF NOT EXISTS content USING fts5(title, correspondent, metadata, body, tokenize='unicode61 remove_diacritics 2', prefix='2 3 4')")
             try execute("INSERT OR REPLACE INTO info VALUES ('identity', ?)", [identity])
         } catch { sqlite3_close(database); database = nil; throw error }
@@ -83,6 +86,7 @@ final class FullTextIndex {
             try execute("DELETE FROM content")
             try execute("DELETE FROM collections")
             try execute("DELETE FROM tags")
+            try execute("DELETE FROM entities")
             try execute("DELETE FROM documents")
             try execute("DELETE FROM info WHERE key='built'")
         }
@@ -103,11 +107,13 @@ final class FullTextIndex {
         try execute("INSERT INTO content(rowid,title,correspondent,metadata,body) VALUES(?,?,?,?,?)", [String(rowID), document.title, document.correspondent, document.searchableText, body])
         for name in document.collections { try execute("INSERT INTO collections VALUES(?,?)", [id, name]) }
         for name in document.tagList { try execute("INSERT OR IGNORE INTO tags VALUES(?,?,?)", [id, name.lowercased(), name]) }
+        for name in document.entityList { try execute("INSERT OR IGNORE INTO entities VALUES(?,?,?)", [id, name.lowercased(), name]) }
     }
     func remove(_ id: String) throws {
         try execute("DELETE FROM content WHERE rowid IN (SELECT rowid FROM documents WHERE id=?)", [id])
         try execute("DELETE FROM collections WHERE documentID=?", [id])
         try execute("DELETE FROM tags WHERE documentID=?", [id])
+        try execute("DELETE FROM entities WHERE documentID=?", [id])
         try execute("DELETE FROM documents WHERE id=?", [id])
     }
     func statistics() throws -> LibraryStatistics {
@@ -151,6 +157,7 @@ final class FullTextIndex {
     static func conditions(_ filter: LibraryFilter, now: Date = Date()) -> ([String], [String]) {
         var sql: [String] = [], values: [String] = []
         if let tag = filter.tag { sql.append("EXISTS (SELECT 1 FROM tags t WHERE t.documentID=d.id AND t.key=?)"); values.append(tag.lowercased()) }
+        if let entity = filter.entity { sql.append("EXISTS (SELECT 1 FROM entities e WHERE e.documentID=d.id AND e.key=?)"); values.append(entity.lowercased()) }
         if let sender = filter.sender { sql.append("d.sender=? COLLATE NOCASE"); values.append(sender) }
         if let type = filter.type { sql.append("d.kind=? COLLATE NOCASE"); values.append(type) }
         if let period = filter.period {
@@ -174,9 +181,20 @@ final class FullTextIndex {
         }
         var facets = LibraryFacets()
         facets.tags = try counted("SELECT min(t.name), count(*) FROM tags t JOIN documents d ON d.id=t.documentID WHERE d.trashed=0 GROUP BY t.key ORDER BY count(*) DESC, min(t.name) LIMIT 200")
+        facets.entities = try counted("SELECT min(e.name), count(*) FROM entities e JOIN documents d ON d.id=e.documentID WHERE d.trashed=0 GROUP BY e.key ORDER BY count(*) DESC, min(e.name) LIMIT 200")
         facets.senders = try counted("SELECT min(sender), count(*) FROM documents WHERE trashed=0 AND sender<>'' GROUP BY sender COLLATE NOCASE ORDER BY count(*) DESC LIMIT 40")
         facets.types = try counted("SELECT min(kind), count(*) FROM documents WHERE trashed=0 AND kind<>'' GROUP BY kind COLLATE NOCASE ORDER BY count(*) DESC LIMIT 40")
         facets.years = try rows("SELECT DISTINCT CAST(strftime('%Y', dated, 'unixepoch', 'localtime') AS INTEGER) FROM documents WHERE trashed=0 AND dated>0 ORDER BY 1 DESC").compactMap { Int($0[0]) }
         return facets
+    }
+    /// Other documents outside Trash sharing a person or thing with this one, most shared first.
+    func related(to id: String, limit: Int = 12) throws -> [(id: String, shared: [String])] {
+        let found = try rows("""
+            SELECT other.documentID, group_concat(other.name, '|') FROM entities mine
+            JOIN entities other ON other.key=mine.key AND other.documentID<>mine.documentID
+            JOIN documents d ON d.id=other.documentID AND d.trashed=0
+            WHERE mine.documentID=? GROUP BY other.documentID ORDER BY count(*) DESC, max(d.dated) DESC LIMIT ?
+            """, [id, String(limit)])
+        return found.map { ($0[0], $0[1].split(separator: "|").map(String.init)) }
     }
 }

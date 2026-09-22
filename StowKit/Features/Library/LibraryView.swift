@@ -194,7 +194,8 @@ struct LibraryView: View {
                     setPinned: { library.setPinned(document.id, $0) },
                     removeDownload: { library.removeDownload(document.id) },
                     deletePermanently: { pendingDeletion = [document.id] },
-                    review: library.inboxReview(for: document.id))
+                    review: library.inboxReview(for: document.id),
+                    related: { await library.related(to: $0) }, openDocument: { library.showDocument($0) })
                     .id(document.id)
                     // iCloud connects after launch; re-derive when it does so the controls appear.
                     .task(id: "\(document.id)|\(library.cloudEnabled)|\(library.cloudReadOnly)|\(library.cloudAccessSuspended)") {

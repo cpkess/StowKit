@@ -36,6 +36,7 @@ struct LibraryFilter: Codable, Equatable, Hashable, Sendable {
         }
     }
     var tag: String?
+    var entity: String?
     var sender: String?
     var type: String?
     var period: Period?
@@ -47,6 +48,7 @@ struct LibraryFilter: Codable, Equatable, Hashable, Sendable {
     var parts: [(label: String, remove: (inout LibraryFilter) -> Void)] {
         var result: [(String, (inout LibraryFilter) -> Void)] = []
         if let tag { result.append(("Tag: \(tag)", { $0.tag = nil })) }
+        if let entity { result.append(("About: \(entity)", { $0.entity = nil })) }
         if let sender { result.append(("From: \(sender)", { $0.sender = nil })) }
         if let type { result.append(("Type: \(type)", { $0.type = nil })) }
         if let period { result.append((period.label, { $0.period = nil })) }
@@ -68,11 +70,13 @@ struct SavedView: Codable, Identifiable, Equatable, Sendable {
 /// The choices the filter menus offer, most used first.
 struct LibraryFacets: Equatable, Sendable {
     var tags: [(name: String, count: Int)] = []
+    var entities: [(name: String, count: Int)] = []
     var senders: [(name: String, count: Int)] = []
     var types: [(name: String, count: Int)] = []
     var years: [Int] = []
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.tags.map(\.name) == rhs.tags.map(\.name) && lhs.tags.map(\.count) == rhs.tags.map(\.count)
+            && lhs.entities.map(\.name) == rhs.entities.map(\.name) && lhs.entities.map(\.count) == rhs.entities.map(\.count)
             && lhs.senders.map(\.name) == rhs.senders.map(\.name) && lhs.types.map(\.name) == rhs.types.map(\.name) && lhs.years == rhs.years
     }
 }
@@ -80,4 +84,25 @@ struct LibraryFacets: Equatable, Sendable {
 extension HouseholdDocument {
     /// Tags as a list, trimmed, without empties. Storage and sync keep the comma-separated text.
     var tagList: [String] { tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+    /// "People & things" as a list: comma- or semicolon-separated, like tags. It syncs as text.
+    var entityList: [String] { entities.split(whereSeparator: { $0 == "," || $0 == ";" }).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+}
+
+/// What an entity is, from the product brief. Only a label and icon; kept per Mac.
+enum EntityKind: String, Codable, CaseIterable, Sendable {
+    case person, organization, property, vehicle, product, account, school, pet, other
+    var label: String { rawValue.capitalized }
+    var symbol: String {
+        switch self {
+        case .person: "person"
+        case .organization: "building.2"
+        case .property: "house"
+        case .vehicle: "car"
+        case .product: "shippingbox"
+        case .account: "creditcard"
+        case .school: "graduationcap"
+        case .pet: "pawprint"
+        case .other: "circle.grid.2x2"
+        }
+    }
 }

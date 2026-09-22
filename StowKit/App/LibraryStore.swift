@@ -31,6 +31,7 @@ final class LibraryStore {
     var filter = LibraryFilter() { didSet { if filter != oldValue { selectedOverride = nil; refreshTextSearch() } } }
     private(set) var facets = LibraryFacets()
     private(set) var savedViews: [SavedView] = []
+    private(set) var entityKinds: [String: EntityKind] = [:]
     var errorMessage: String?
     var cloudStatus = "iCloud is off"
     var cloudHasError = false
@@ -225,6 +226,29 @@ final class LibraryStore {
         catch { errorMessage = "Your saved views could not be saved.\n\n\(error.localizedDescription)" }
     }
     func showTag(_ tag: String) { destination = .recent; search = ""; filter = LibraryFilter(tag: tag) }
+    func showEntity(_ name: String) { destination = .recent; search = ""; filter = LibraryFilter(entity: name) }
+    func kind(of entity: String) -> EntityKind? { entityKinds[entity.lowercased()] }
+    func setKind(_ kind: EntityKind?, for entity: String) {
+        var kinds = entityKinds
+        kinds[entity.lowercased()] = kind
+        do { try repository?.saveEntityKinds(kinds); entityKinds = kinds }
+        catch { errorMessage = error.localizedDescription }
+    }
+    func renameEntity(_ old: String, to new: String) {
+        guard allowCloudEdit(), let repository else { return }
+        do {
+            let changed = try repository.renameEntity(old, to: new)
+            if let kind = kind(of: old), !new.isEmpty { setKind(kind, for: new) }
+            if filter.entity?.caseInsensitiveCompare(old) == .orderedSame { filter.entity = new.isEmpty ? nil : new }
+            lastImportMessage = "\(new.isEmpty ? "Removed" : "Renamed") it on \(changed) \(changed == 1 ? "document" : "documents")"
+            refreshTextSearch(resetLimit: false); syncNow()
+        } catch { errorMessage = "The change could not be saved.\n\n\(error.localizedDescription)" }
+    }
+    /// Documents sharing a person or thing with this one (see `FullTextIndex.related`).
+    func related(to document: HouseholdDocument) async -> [(document: HouseholdDocument, shared: [String])] {
+        guard !document.entityList.isEmpty, let service = textSearchService else { return [] }
+        return (try? await service.related(to: document)) ?? []
+    }
     func renameTag(_ old: String, to new: String) {
         guard allowCloudEdit(), let repository else { return }
         do {
@@ -366,6 +390,7 @@ final class LibraryStore {
             collections = try repository.collections()
             filingRules = (try? repository.filingRules()) ?? []
             savedViews = (try? repository.savedViews()) ?? []
+            entityKinds = (try? repository.entityKinds()) ?? [:]
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
             do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }
@@ -539,7 +564,7 @@ final class LibraryStore {
     func showDocument(_ id: UUID) {
         guard let document = (try? repository?.document(id)) else { return }
         destination = document.trashedAt == nil ? .recent : .trash
-        search = ""
+        search = ""; filter = LibraryFilter()
         selectedOverride = document
         selection = id
     }

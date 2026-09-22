@@ -25,6 +25,8 @@ struct DocumentUnderstanding: Codable, Sendable, Equatable {
     var dueOn: String?
     var expiresOn: String?
     var amount: String?
+    /// People, organizations, and things named in the document; each checked against the text.
+    var entities: [String]?
 }
 protocol DocumentIntelligenceProvider: Sendable {
     func understand(_ input: UnderstandingInput) async throws -> DocumentUnderstanding
@@ -35,7 +37,7 @@ enum UnderstandingPolicy {
     static let automaticThreshold = 0.90
     static let filingThreshold = 0.65
     static let fields = ["title", "summary", "correspondent", "collections", "tags", "review",
-                         "documentDate", "documentType", "amount", "dueDate", "expiresAt"]
+                         "documentDate", "documentType", "amount", "dueDate", "expiresAt", "entities"]
     static func validated(_ proposal: DocumentUnderstanding, input: UnderstandingInput) -> DocumentUnderstanding {
         var result = proposal
         result.title = String(result.title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
@@ -48,6 +50,11 @@ enum UnderstandingPolicy {
         result.dueOn = DocumentFacts.supportedDay(result.dueOn, among: days)
         result.expiresOn = DocumentFacts.supportedDay(result.expiresOn, among: days)
         result.amount = DocumentFacts.supportedAmount(result.amount, in: input.text)
+        let named = (result.entities ?? []).map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)) }
+            .filter { DocumentFacts.named($0, in: input.text) }
+        var seen = Set<String>()
+        let unique = named.filter { seen.insert($0.lowercased()).inserted }.prefix(5)
+        result.entities = unique.isEmpty ? nil : Array(unique)
         let text = TextNormalization.searchKey(input.text)
         if !result.correspondent.isEmpty && !text.contains(TextNormalization.searchKey(result.correspondent)) { result.correspondent = "" }
         if !input.collections.contains(result.collection) || !evidenceSupported(result.evidence, by: input.text) {
@@ -94,6 +101,11 @@ enum UnderstandingPolicy {
         if !protected.contains("collections") && !result.collection.isEmpty { edited.collections.insert(result.collection) }
         if !protected.contains("tags") && !result.tags.isEmpty { edited.tags = result.tags.joined(separator: ", ") }
         if !protected.contains("documentType") && !result.documentType.isEmpty { edited.documentType = result.documentType }
+        if !protected.contains("entities"), let named = result.entities {
+            var list = edited.entityList
+            for name in named where !list.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { list.append(name) }
+            edited.entities = list.joined(separator: ", ")
+        }
         if !protected.contains("review") { edited.needsReview = explicit ? false : result.confidence < filingThreshold }
         return edited
     }

@@ -25,6 +25,7 @@ extension ArchiveRepository {
         if old.amount != new.amount { fields.insert("amount") }
         if old.dueDate != new.dueDate { fields.insert("dueDate") }
         if old.expiresAt != new.expiresAt { fields.insert("expiresAt") }
+        if old.entities != new.entities { fields.insert("entities") }
         record.protectedFields = fields.sorted()
         if new.trashedAt != nil && ["queued", "analyzing"].contains(record.state) {
             record.state = "paused"; record.revision += 1

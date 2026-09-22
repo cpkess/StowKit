@@ -14,6 +14,7 @@ import FoundationModels
     @Guide(description: "A payment or response due date, as YYYY-MM-DD, or empty") var dueOn: String
     @Guide(description: "An expiration, renewal, or end-of-coverage date, as YYYY-MM-DD, or empty") var expiresOn: String
     @Guide(description: "The total amount due or paid, copied exactly as written, or empty") var amount: String
+    @Guide(description: "At most five people, organizations, products, vehicles, pets, or properties named in the document, each copied exactly") var entities: [String]
 }
 
 /// The model's answer before validation, from either the structured or the plain-text path.
@@ -22,12 +23,13 @@ struct ModelFields: Equatable {
     var tags: [String] = []
     var summary = "", evidence = ""
     var issuedOn = "", dueOn = "", expiresOn = "", amount = ""
+    var entities: [String] = []
 
     /// Parse the plain-text `LABEL: value` answer used when guided generation is refused.
     /// Labels are located anywhere, because the model sometimes returns every field on one line
     /// separated by " / ". The first occurrence of each label wins; everything is re-validated.
     static func parseLabeled(_ text: String) -> ModelFields {
-        guard let regex = try? NSRegularExpression(pattern: #"(?i)\b(TITLE|TYPE|COLLECTION|CORRESPONDENT|TAGS|SUMMARY|EVIDENCE|DATE|DUE|EXPIRES|AMOUNT)\s*:"#) else { return ModelFields() }
+        guard let regex = try? NSRegularExpression(pattern: #"(?i)\b(TITLE|TYPE|COLLECTION|CORRESPONDENT|TAGS|SUMMARY|EVIDENCE|DATE|DUE|EXPIRES|AMOUNT|NAMES)\s*:"#) else { return ModelFields() }
         let source = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: source.length))
         let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "/|-*•"))
@@ -52,6 +54,7 @@ struct ModelFields: Equatable {
             case "DUE": fields.dueOn = value
             case "EXPIRES": fields.expiresOn = value
             case "AMOUNT": fields.amount = value
+            case "NAMES": fields.entities = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             default: fields.evidence = value
             }
         }
@@ -82,7 +85,7 @@ struct AppleFoundationModelProvider: DocumentIntelligenceProvider {
             collection: output.collection, correspondent: output.correspondent, tags: output.tags, summary: output.summary,
             evidence: output.evidence, confidence: confidence, provider: "Apple on-device model",
             issuedOn: optional(output.issuedOn), dueOn: optional(output.dueOn), expiresOn: optional(output.expiresOn),
-            amount: optional(output.amount)), input: input)
+            amount: optional(output.amount), entities: output.entities.isEmpty ? nil : output.entities), input: input)
     }
 
     private func structured(_ input: UnderstandingInput) async throws -> ModelFields {
@@ -92,7 +95,7 @@ struct AppleFoundationModelProvider: DocumentIntelligenceProvider {
         let output = response.content
         return ModelFields(title: output.title, documentType: output.documentType, collection: output.collection,
             correspondent: output.correspondent, tags: output.tags, summary: output.summary, evidence: output.evidence,
-            issuedOn: output.issuedOn, dueOn: output.dueOn, expiresOn: output.expiresOn, amount: output.amount)
+            issuedOn: output.issuedOn, dueOn: output.dueOn, expiresOn: output.expiresOn, amount: output.amount, entities: output.entities)
     }
 
     /// macOS 27 reports refusals as `LanguageModelError`; macOS 26 used the now-deprecated
@@ -110,7 +113,7 @@ struct AppleFoundationModelProvider: DocumentIntelligenceProvider {
     private func permissive(_ input: UnderstandingInput) async throws -> ModelFields {
         let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
         let session = LanguageModelSession(model: model, instructions: Self.instructions + """
-         Answer with exactly these eleven lines and nothing else:
+         Answer with exactly these twelve lines and nothing else:
         TITLE: short descriptive title, at most 12 words
         TYPE: document type, or blank
         COLLECTION: exactly one allowed collection, or blank
@@ -122,6 +125,7 @@ struct AppleFoundationModelProvider: DocumentIntelligenceProvider {
         DUE: a payment or response due date, as YYYY-MM-DD, or blank
         EXPIRES: an expiration or renewal date, as YYYY-MM-DD, or blank
         AMOUNT: the total amount due or paid, exactly as written, or blank
+        NAMES: up to five people, organizations, products, vehicles, pets, or properties named, comma separated
         """)
         let response = try await session.respond(to: "Allowed collections: \(input.collections.joined(separator: ", ")).\n<document>\n\(input.text)\n</document>",
             options: GenerationOptions(temperature: 0, maximumResponseTokens: 600))

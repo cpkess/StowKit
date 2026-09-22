@@ -20,6 +20,8 @@ struct DocumentDetailView: View {
     let removeDownload: () -> Void
     let deletePermanently: () -> Void
     var review: InboxReview? = nil
+    var related: ((HouseholdDocument) async -> [(document: HouseholdDocument, shared: [String])])? = nil
+    var openDocument: ((UUID) -> Void)? = nil
     @State private var showDetails = true
     @State private var showMore = false
     @State private var quickLookURL: URL?
@@ -86,6 +88,9 @@ struct DocumentDetailView: View {
                                 field("Tags") { TextField("Separate tags with commas", text: $document.tags) }
                                 field("Summary") { TextField("A sentence about this document", text: $document.summary, axis: .vertical) }
                             }.textFieldStyle(.roundedBorder).font(.subheadline)
+                            if let related, let openDocument, !document.entityList.isEmpty {
+                                RelatedDocumentsView(document: document, load: related, open: openDocument)
+                            }
                             UnderstandingInspector(snapshot: analysis, isTrashed: document.trashedAt != nil, retry: retryAnalysis, apply: applyAnalysis)
                             DisclosureGroup("More Details", isExpanded: $showMore) {
                                 VStack(alignment: .leading, spacing: 16) {

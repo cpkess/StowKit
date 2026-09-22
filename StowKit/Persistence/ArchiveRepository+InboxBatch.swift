@@ -48,6 +48,7 @@ extension ArchiveRepository {
             if result.dueOn != nil { fields.insert("dueDate") }
             if result.expiresOn != nil { fields.insert("expiresAt") }
             if result.issuedOn != nil { fields.insert("documentDate") }
+            if result.entities != nil { fields.insert("entities") }
             job.protectedFields = fields.sorted()
         }
         try update(UnderstandingPolicy.merge(result, into: document, protected: [], explicit: true))

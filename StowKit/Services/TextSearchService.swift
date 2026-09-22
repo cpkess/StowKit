@@ -96,6 +96,15 @@ import SwiftData
         }, total: result.total, statistics: try index.statistics())
     }
 
+    func related(to document: HouseholdDocument) throws -> [(document: HouseholdDocument, shared: [String])] {
+        try synchronize()
+        guard let index else { throw ArchiveError.missingRecord }
+        let links = try index.related(to: document.id.uuidString)
+        let ids = links.compactMap { UUID(uuidString: $0.id) }
+        let context = ModelContext(modelContainer)
+        let byID = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<Record>(predicate: #Predicate { ids.contains($0.id) })).map { ($0.id.uuidString, $0.document) })
+        return links.compactMap { link in byID[link.id].map { ($0, link.shared) } }
+    }
     func facets() throws -> LibraryFacets {
         try synchronize()
         guard let index else { throw ArchiveError.missingRecord }

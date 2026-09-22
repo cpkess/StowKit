@@ -6,21 +6,8 @@ import SwiftData
 extension ArchiveRepository {
     private static let rulesKey = "filing-rules-v1"
 
-    func filingRules() throws -> [FilingRule] {
-        let key = Self.rulesKey
-        guard let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first,
-              let data = row.value.data(using: .utf8), !data.isEmpty else { return [] }
-        return try JSONDecoder().decode([FilingRule].self, from: data)
-    }
-    func saveFilingRules(_ rules: [FilingRule]) throws {
-        let key = Self.rulesKey
-        let value = String(decoding: try JSONEncoder().encode(rules), as: UTF8.self)
-        do {
-            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = value }
-            else { context.insert(Checkpoint(key, value: value)) }
-            try save()
-        } catch { context.rollback(); throw error }
-    }
+    func filingRules() throws -> [FilingRule] { try storedJSON(Self.rulesKey) ?? [] }
+    func saveFilingRules(_ rules: [FilingRule]) throws { try storeJSON(rules, Self.rulesKey) }
     func filingRuleInput(_ document: HouseholdDocument) throws -> FilingRuleInput {
         let id = document.id
         var text = ""
@@ -64,18 +51,26 @@ extension ArchiveRepository {
     // MARK: Saved views, stored the same way
 
     private static let savedViewsKey = "saved-views-v1"
-    func savedViews() throws -> [SavedView] {
-        let key = Self.savedViewsKey
+    func savedViews() throws -> [SavedView] { try storedJSON(Self.savedViewsKey) ?? [] }
+    func saveSavedViews(_ views: [SavedView]) throws { try storeJSON(views, Self.savedViewsKey) }
+
+    // MARK: Entity kinds, stored the same way (lowercased name → kind)
+
+    private static let entityKindsKey = "entity-kinds-v1"
+    func entityKinds() throws -> [String: EntityKind] { try storedJSON(Self.entityKindsKey) ?? [:] }
+    func saveEntityKinds(_ kinds: [String: EntityKind]) throws { try storeJSON(kinds, Self.entityKindsKey) }
+
+    /// Per-Mac settings kept as JSON in a checkpoint row: no schema change, not synced.
+    private func storedJSON<T: Decodable>(_ key: String) throws -> T? {
         guard let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first,
-              let data = row.value.data(using: .utf8), !data.isEmpty else { return [] }
-        return try JSONDecoder().decode([SavedView].self, from: data)
+              let data = row.value.data(using: .utf8), !data.isEmpty else { return nil }
+        return try JSONDecoder().decode(T.self, from: data)
     }
-    func saveSavedViews(_ views: [SavedView]) throws {
-        let key = Self.savedViewsKey
-        let value = String(decoding: try JSONEncoder().encode(views), as: UTF8.self)
+    private func storeJSON<T: Encodable>(_ value: T, _ key: String) throws {
+        let text = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
         do {
-            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = value }
-            else { context.insert(Checkpoint(key, value: value)) }
+            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = text }
+            else { context.insert(Checkpoint(key, value: text)) }
             try save()
         } catch { context.rollback(); throw error }
     }
@@ -86,19 +81,28 @@ extension ArchiveRepository {
     /// the owner's edit, so it goes through `update`: protected from suggestions and synced.
     @discardableResult
     func renameTag(_ old: String, to new: String) throws -> Int {
+        try renameListItem(old, to: new, in: \.tagList) { $0.tags = $1 }
+    }
+    /// The same for a person or thing in "People & things".
+    @discardableResult
+    func renameEntity(_ old: String, to new: String) throws -> Int {
+        try renameListItem(old, to: new, in: \.entityList) { $0.entities = $1 }
+    }
+    private func renameListItem(_ old: String, to new: String, in list: KeyPath<HouseholdDocument, [String]>,
+                                write: (inout HouseholdDocument, String) -> Void) throws -> Int {
         let key = old.trimmingCharacters(in: .whitespaces).lowercased()
-        let replacement = new.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: " ")
+        let replacement = new.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: " ").replacingOccurrences(of: ";", with: " ")
         guard !key.isEmpty else { return 0 }
         var changed = 0
         for record in try context.fetch(FetchDescriptor<Record>()) {
             var document = record.document
-            guard document.trashedAt == nil, document.tagList.contains(where: { $0.lowercased() == key }) else { continue }
-            var tags: [String] = []
-            for tag in document.tagList {
-                let value = tag.lowercased() == key ? replacement : tag
-                if !value.isEmpty, !tags.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) { tags.append(value) }
+            guard document.trashedAt == nil, document[keyPath: list].contains(where: { $0.lowercased() == key }) else { continue }
+            var items: [String] = []
+            for item in document[keyPath: list] {
+                let value = item.lowercased() == key ? replacement : item
+                if !value.isEmpty, !items.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) { items.append(value) }
             }
-            document.tags = tags.joined(separator: ", ")
+            write(&document, items.joined(separator: ", "))
             document.modifiedAt = Date()
             try update(document)
             changed += 1

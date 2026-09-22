@@ -12,6 +12,9 @@ struct FilterBar: View {
                 if !library.facets.tags.isEmpty {
                     Menu("Tag") { ForEach(library.facets.tags.prefix(40), id: \.name) { tag in Button("\(tag.name) (\(tag.count))") { library.filter.tag = tag.name } } }
                 }
+                if !library.facets.entities.isEmpty {
+                    Menu("About") { ForEach(library.facets.entities.prefix(40), id: \.name) { entity in Button("\(entity.name) (\(entity.count))") { library.filter.entity = entity.name } } }
+                }
                 if !library.facets.senders.isEmpty {
                     Menu("From") { ForEach(library.facets.senders, id: \.name) { sender in Button("\(sender.name) (\(sender.count))") { library.filter.sender = sender.name } } }
                 }
@@ -61,6 +64,7 @@ struct FilterBar: View {
 struct SidebarExtras: View {
     @Bindable var library: LibraryStore
     @State private var renaming: String?
+    @State private var renamingEntity: String?
     @State private var newName = ""
     var body: some View {
         if !library.savedViews.isEmpty {
@@ -69,6 +73,26 @@ struct SidebarExtras: View {
                     Button { library.apply(view) } label: { Label(view.name, systemImage: "line.3.horizontal.decrease.circle") }
                         .buttonStyle(.plain)
                         .contextMenu { Button("Delete Saved View", role: .destructive) { library.deleteSavedView(view.id) } }
+                }
+            }
+        }
+        if !library.facets.entities.isEmpty {
+            Section("People & Things") {
+                ForEach(library.facets.entities.prefix(12), id: \.name) { entity in
+                    Button { library.showEntity(entity.name) } label: {
+                        Label(entity.name, systemImage: library.kind(of: entity.name)?.symbol ?? "circle.grid.2x2")
+                    }
+                    .buttonStyle(.plain).badge(entity.count)
+                    .contextMenu {
+                        Menu("Kind") {
+                            ForEach(EntityKind.allCases, id: \.self) { kind in
+                                Toggle(kind.label, isOn: Binding(get: { library.kind(of: entity.name) == kind },
+                                                                 set: { library.setKind($0 ? kind : nil, for: entity.name) }))
+                            }
+                        }
+                        Button("Rename…") { newName = entity.name; renamingEntity = entity.name }
+                        Button("Remove from All Documents", role: .destructive) { library.renameEntity(entity.name, to: "") }
+                    }
                 }
             }
         }
@@ -90,5 +114,10 @@ struct SidebarExtras: View {
                 Button("Rename") { if let old = renaming { library.renameTag(old, to: newName) }; renaming = nil }
                 Button("Cancel", role: .cancel) { renaming = nil }
             } message: { Text("Renames “\(renaming ?? "")” on every document outside Trash.") }
+            .alert("Rename", isPresented: Binding(get: { renamingEntity != nil }, set: { if !$0 { renamingEntity = nil } })) {
+                TextField("New name", text: $newName)
+                Button("Rename") { if let old = renamingEntity { library.renameEntity(old, to: newName) }; renamingEntity = nil }
+                Button("Cancel", role: .cancel) { renamingEntity = nil }
+            } message: { Text("Renames “\(renamingEntity ?? "")” in People & Things on every document outside Trash.") }
     }
 }

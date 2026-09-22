@@ -1,5 +1,27 @@
 # Validation
 
+## People & things, and related documents (unreleased)
+
+September 21, 2026. The existing, already-synced "People & things" field is now treated as a list, like
+tags (comma- or semicolon-separated), so no sync format changed. The search index gained an `entities`
+table (identity ":3", rebuilt from saved data). A People & Things sidebar section lists the most used with
+counts, each with a kind (Person, Organization, Property, Vehicle, Product, Account, School, Pet, Other;
+per Mac, a label and icon only) and Rename/Remove across the archive; the Filter menu has "About". The
+details pane's Related list shows other documents outside Trash that share a person or thing, most shared
+first. Suggestions now propose up to five names; each is kept only if its words appear together, in order,
+in the text, and joins the owner's list unless the field is protected (editing it protects it). Names
+need filing confidence. The field was already journaled as a manual field, so suggested names sync that way.
+Rules, saved views, and entity kinds now share one JSON-in-a-checkpoint helper.
+
+`EntityTests`, 4 tests, pass: names checked against the text (split lines allowed, order required,
+invented dropped, duplicates merged), merging with protection and confidence, related documents (most
+shared first, Trash and unrelated excluded), the About filter and facet counts, and entity rename with
+protection and kinds surviving a reopen. Mutation check: with the name check accepting everything, the
+first test fails. Full suite: 182 tests, 0 failures (output saved and read).
+
+**Not established.** Not seen in the running app, and no model output with names observed on real
+documents. Manual links between documents that share no name are not built.
+
 ## Multi-select editing (unreleased)
 
 September 21, 2026. The document list takes ⌘- and ⇧-click; with several selected, the details pane is a

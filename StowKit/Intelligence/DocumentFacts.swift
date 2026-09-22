@@ -42,6 +42,14 @@ enum DocumentFacts {
         }
         return nil
     }
+    /// A name is kept only if its words appear together, in order, in the text (case and accents
+    /// ignored). Short names are allowed, unlike collection evidence, but nothing invented is.
+    static func named(_ name: String, in text: String) -> Bool {
+        func words(_ value: String) -> [String] { TextNormalization.searchKey(value).split { !$0.isLetter && !$0.isNumber }.map(String.init) }
+        let wanted = words(name), source = words(text)
+        guard !wanted.isEmpty, wanted.joined().count >= 2, source.count >= wanted.count else { return false }
+        return (0...(source.count - wanted.count)).contains { source[$0..<($0 + wanted.count)].elementsEqual(wanted) }
+    }
     static func date(_ day: String) -> Date? {
         let parts = day.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3, (1900...2200).contains(parts[0]) else { return nil }
