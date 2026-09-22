@@ -1,5 +1,23 @@
 # Validation
 
+## Multi-select editing (unreleased)
+
+September 21, 2026. The document list takes ⌘- and ⇧-click; with several selected, the details pane is a
+bulk editor: add to or remove from a collection, add or remove a tag, set sender, type, or date, mark
+reviewed or needs review, favorite, Suggest Again, and Move to Trash (the Delete key trashes the whole
+selection). Each change goes through `update` per document, so it is protected and synced exactly like a
+single edit; unchanged documents aren't rewritten. `selection` is now "the one selected document" over a
+`selectedIDs` set, and refreshing the list no longer collapses a multi-selection.
+
+`BulkEditTests`, 3 tests, pass on a real `LibraryStore` with imported PDFs: a multi-selection survives
+refreshes; one change applies to exactly the selected documents with the fields protected; an unchanged
+document isn't rewritten; tags are added and removed; trashed and then deleted documents leave the
+selection. Mutation check: without the multi-selection guard in `reconcileSelection`, the first test fails.
+Full suite: 178 tests, 0 failures (output saved and read).
+
+**Not established.** Not used in the running app yet; ⌘/⇧-click behavior is SwiftUI's `List` and was not
+exercised by a test.
+
 ## Import from paperless-ngx (unreleased)
 
 September 21, 2026. File → Import from paperless-ngx… reads a `document_exporter` folder (`manifest.json`,

@@ -91,7 +91,7 @@ struct LibraryView: View {
                         }
                     }.frame(maxHeight: .infinity)
                 } else {
-                    List(selection: $library.selection) {
+                    List(selection: $library.selectedIDs) {
                         ForEach(library.visibleDocuments) { document in
                             DocumentRow(document: document, thumbnails: library.thumbnails, processing: library.processing[document.id], snippet: library.snippets[document.id] ?? "", searching: !library.search.isEmpty, analysis: library.analysis[document.id], downloaded: library.cloudEnabled ? library.isDownloaded(document) : nil).tag(document.id)
                                 .contextMenu {
@@ -116,7 +116,10 @@ struct LibraryView: View {
                                 }
                         }
                     }.onDeleteCommand {
-                        if let id = library.selection, library.destination != .trash { library.moveToTrash(id) }
+                        if library.destination != .trash, !library.selectedIDs.isEmpty {
+                            let ids = library.selectedIDs
+                            library.bulkEdit(ids) { $0.trashedAt = Date() }
+                        }
                     }.listStyle(.inset).alternatingRowBackgrounds(.disabled)
                     // Row heights differ only between browsing and searching; rebuild when that flips.
                     .id(library.search.isEmpty)
@@ -176,7 +179,9 @@ struct LibraryView: View {
             .navigationTitle(library.destination?.title ?? "Recent")
             .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 450)
         } detail: {
-            if let document = library.selectedDocument {
+            if library.selectedIDs.count > 1 {
+                BulkEditView(library: library, ids: library.selectedIDs)
+            } else if let document = library.selectedDocument {
                 DocumentDetailView(document: library.binding(for: document), collections: library.collections,
                     storage: library.storage, thumbnails: library.thumbnails,
                     openCopy: { library.openCopy(document) },

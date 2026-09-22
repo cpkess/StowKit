@@ -20,7 +20,13 @@ struct ImportReport: Identifiable {
 final class LibraryStore {
     private(set) var documents: [HouseholdDocument] = []
     var destination: LibraryDestination? = .recent { didSet { selectedOverride = nil; refreshTextSearch() } }
-    var selection: UUID?
+    /// The list's selection; several documents open the bulk editor instead of one document.
+    var selectedIDs: Set<UUID> = []
+    /// The single selected document, if exactly one is selected. Setting it selects only that one.
+    var selection: UUID? {
+        get { selectedIDs.count == 1 ? selectedIDs.first : nil }
+        set { selectedIDs = newValue.map { [$0] } ?? [] }
+    }
     var search = "" { didSet { selectedOverride = nil; refreshTextSearch() } }
     var filter = LibraryFilter() { didSet { if filter != oldValue { selectedOverride = nil; refreshTextSearch() } } }
     private(set) var facets = LibraryFacets()
@@ -333,7 +339,8 @@ final class LibraryStore {
         pendingProcessingCount = overview.pending
     }
     func reconcileSelection() {
-        if !isSearchingText && selectedDocument == nil { selection = visibleDocuments.first?.id }
+        // Never collapse a multi-selection, which has no single selected document by design.
+        if !isSearchingText && selectedIDs.count <= 1 && selectedDocument == nil { selection = visibleDocuments.first?.id }
     }
     func start() async {
         guard !isReady, !isLoading else { return }
@@ -461,7 +468,7 @@ final class LibraryStore {
         guard let repository, !ids.isEmpty else { return }
         do { try repository.permanentlyDelete(ids) }
         catch { errorMessage = "The documents could not be deleted.\n\n\(error.localizedDescription)"; return }
-        if let selection, ids.contains(selection) { self.selection = nil; selectedOverride = nil }
+        if !selectedIDs.isDisjoint(with: ids) { selectedIDs.subtract(ids); selectedOverride = nil }
         refreshTextSearch(resetLimit: false)
         Task { await purgeDeletedFiles(); cloudCoordinator?.schedule() }
     }
@@ -478,6 +485,34 @@ final class LibraryStore {
             } catch { continue }   // left on the list; retried on the next launch or sync
         }
     }
+    // MARK: Bulk editing
+
+    /// Applies one change to each document, as the owner's edit: protected from suggestions and
+    /// synced, exactly like editing each one. Returns how many changed; failures are reported once.
+    @discardableResult
+    func bulkEdit(_ ids: Set<UUID>, _ change: (inout HouseholdDocument) -> Void) -> Int {
+        guard allowCloudEdit(), let repository else { return 0 }
+        var changed = 0, failed = 0
+        for id in ids {
+            guard var document = try? repository.document(id) else { continue }
+            let before = document
+            change(&document)
+            guard document != before else { continue }
+            document.modifiedAt = Date()
+            do { try repository.update(document); changed += 1 } catch { failed += 1 }
+        }
+        if failed > 0 { errorMessage = "\(failed) \(failed == 1 ? "document" : "documents") couldn’t be changed." }
+        selectedOverride = nil
+        refreshTextSearch(resetLimit: false); refreshProcessingOverview(); syncNow()
+        lastImportMessage = "Changed \(changed) \(changed == 1 ? "document" : "documents")"
+        return changed
+    }
+    func suggestAgain(_ ids: Set<UUID>) {
+        guard allowCloudEdit(), let repository else { return }
+        do { try repository.requestAnalyses(Array(ids)); refreshProcessingOverview(); if processingEnabled { intelligenceProcessor?.start() } }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     func moveToTrash(_ id: UUID) {
         guard var document = (try? repository?.document(id)) else { return }
         document.trashedAt = Date()
