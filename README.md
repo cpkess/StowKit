@@ -22,6 +22,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
 8. StowKit keeps **one archive**, in your iCloud account, with copies on this Mac. On launch it reconnects to that archive, or creates it; an archive that already holds documents asks before its first upload, and **Pause iCloud** in Settings is remembered. The sidebar's bottom-left button shows sync status. Documents behave like iCloud Drive files: a cloud badge marks ones not on this Mac, **Download Now** fetches them, and **Remove Download** frees the local copy while keeping it in iCloud. Without an iCloud-signed build, the archive stays on this Mac.
 9. **Inbox folder** (Settings): choose a folder, ideally in iCloud Drive, and StowKit imports every PDF or image added to it, then moves the file to the Trash. On an iPhone, scan or save into that folder from the Files app; any Mac running StowKit takes it in.
 10. **Filing rules** (Settings → Rules): for example, "any text contains the words *novocare* → add to Medical, tag *insurance*, mark reviewed". Rules run once a document's text is read, after Apple Intelligence, and win over its suggestions, but never change a field you edited yourself. **Apply to Existing Documents** runs them over your archive. Rules are kept on each Mac and don't sync yet.
+11. **Share → StowKit** from any app's Share menu (switch it on once in System Settings → General → Login Items & Extensions → Sharing): PDFs and images are copied into Inbox, and a web page is saved as a paginated PDF. Pages load without your browser sign-ins.
 
 Exact duplicates are detected across the entire archive, including Trash. The import report links to existing documents and identifies individual failures without stopping the remaining batch. A renamed duplicate does not overwrite edited metadata.
 
@@ -74,12 +75,12 @@ See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud a
 
 ## Releases
 
-[v1.3.0](https://github.com/cpkess/StowKit/releases/tag/v1.3.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit. It is the first version that updates itself (Sparkle, from these GitHub releases). Read the [release notes](docs/releases/v1.3.0.md) first: it has been tested on one Mac only, the updater has installed an update once, from a test folder, and household sharing is experimental and untested across accounts. Earlier releases: [v1.2.0](docs/releases/v1.2.0.md), [v1.1.0](docs/releases/v1.1.0.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
+[v1.4.0](https://github.com/cpkess/StowKit/releases/tag/v1.4.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit, and includes the Share → StowKit extension. It updates itself from these GitHub releases. Read the [release notes](docs/releases/v1.4.0.md) first: it has been tested on one Mac only, and household sharing is experimental and untested across accounts. Earlier releases: [v1.3.0](docs/releases/v1.3.0.md), [v1.2.0](docs/releases/v1.2.0.md), [v1.1.0](docs/releases/v1.1.0.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
 
 To package an already signed build without changing its signature:
 
 ```sh
-scripts/package-dmg.sh /path/to/StowKit.app 1.3.0 build/releases
+scripts/package-dmg.sh /path/to/StowKit.app 1.4.0 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.

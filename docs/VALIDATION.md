@@ -1,5 +1,21 @@
 # Validation
 
+## 1.4.0 release build
+
+September 21, 2026: version 1.4.0, build 10, from `f304ac9`. Before release the owner reported that
+Share → StowKit worked for their own shares on the signed test build (a file and a web page into a
+running StowKit), which covers the live hand-off the earlier test left out. `build-distribution.sh`:
+all checks passed, including the extension's team signature and App Group. App and extension are
+universal; Production; no runner or probe strings. App notarization
+`91f1e47e-db95-4d16-baf0-dcf997a74278`, DMG notarization `7576ff22-dd17-4ce2-8e9e-a3c9e499040c`, both
+Accepted, stapled, Gatekeeper-accepted. DMG SHA-256, regenerated after stapling:
+`c08a3e44af60b800bfeaea4249226a267cadf87d467c20e9d3c9e7a07d2a6dfa` (5,305,561 bytes). The mounted
+image's app passes `codesign --verify --deep --strict`, its extension `codesign --verify --strict`, plus
+`spctl` and stapler validation. Appcast signed for build 10 (no Keychain prompt, reusing the approved
+`sign_update`).
+
+**Not established.** This exact binary was not launched against the owner's archive.
+
 ## Share → StowKit extension (unreleased)
 
 September 21, 2026. A new `StowKitShare` app-extension target (`com.stowkit.app.share`, share
