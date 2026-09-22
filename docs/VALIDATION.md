@@ -1,5 +1,26 @@
 # Validation
 
+## Import from paperless-ngx (unreleased)
+
+September 21, 2026. File → Import from paperless-ngx… reads a `document_exporter` folder (`manifest.json`,
+and `*-manifest.json` files from `--split-manifest`), imports each original through the normal importer
+(duplicates skipped by SHA-256), then applies its details through `update`, so each changed field is
+protected from suggestions: title, created date, correspondent → sender, document type → Type, tags,
+notes → summary, and custom fields whose names mention amount/total/price/cost, due, or expiry/renewal.
+A type or tag matching a collection name files it there; the paperless inbox tag keeps it in Inbox,
+otherwise it arrives reviewed. Paperless's `content` becomes the document's text and processing is
+marked complete, unless StowKit had already started reading the file. A summary lists failures.
+
+`PaperlessTests`, 4 tests, pass against a fictional export written in the documented format: field
+mapping (including "USD3972.96" → "USD 3972.96"), split manifests, both date styles, and an end-to-end
+import of a real PDF (details, collection match, text kept, protection, and a second import detected as a
+duplicate). Mutation check: without the inbox-tag mapping, the end-to-end test fails. Full suite: 175
+tests, 0 failures (one run, output saved and read).
+
+**Not established.** Built from paperless-ngx's documented export format; no real paperless export has been
+imported. Other custom fields, storage paths, owners and permissions, and archived (OCR'd PDF) versions
+are ignored; the original file is what StowKit keeps.
+
 ## Tags, filters, and saved views (unreleased)
 
 September 21, 2026. A Filter menu under the search field narrows any view by tag, sender, type, date

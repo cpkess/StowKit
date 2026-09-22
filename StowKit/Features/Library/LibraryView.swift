@@ -133,6 +133,13 @@ struct LibraryView: View {
                     Button(library.isLoadingMore ? "Loading…" : "Load More") { library.loadMore() }
                         .disabled(library.isSearchingText).padding(8)
                 }
+                if let progress = library.paperlessProgress {
+                    HStack(spacing: 8) {
+                        ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 60)
+                        Text("Importing from paperless-ngx: \(progress.done) of \(progress.total)").lineLimit(1)
+                        Spacer()
+                    }.font(.caption).foregroundStyle(.secondary).padding(10)
+                }
                 if let progress = library.exportProgress {
                     HStack(spacing: 8) {
                         ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1))).frame(width: 60)
@@ -240,6 +247,9 @@ struct LibraryView: View {
             searchFocused = true
         }
         .sheet(isPresented: $library.showOrganizeInbox) { OrganizeInboxView(library: library) }
+        .alert("paperless-ngx Import Finished", isPresented: Binding(get: { library.paperlessSummary != nil }, set: { if !$0 { library.paperlessSummary = nil } })) {
+            Button("OK") { library.paperlessSummary = nil }
+        } message: { Text(library.paperlessSummary ?? "") }
         .alert("Export Finished", isPresented: Binding(get: { library.exportResult != nil }, set: { if !$0 { library.exportResult = nil } })) {
             Button("Show in Finder") { if let folder = library.exportResult?.folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) }; library.exportResult = nil }
             Button("OK", role: .cancel) { library.exportResult = nil }

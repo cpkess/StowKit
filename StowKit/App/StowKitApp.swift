@@ -42,6 +42,8 @@ struct StowKitApp: App {
                 Divider()
                 Button("Organize Inbox…") { library.destination = .inbox; library.showOrganizeInbox = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift]).disabled(!library.isReady || library.inboxCount == 0)
+                Button("Import from paperless-ngx…") { library.importPaperless() }
+                    .disabled(!library.isReady || library.paperlessProgress != nil)
                 Button("Export Archive…") { library.exportArchive() }
                     .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(!library.isReady || library.exportProgress != nil)
                 Button("Sync Now") { library.syncNow() }.disabled(!library.cloudEnabled)

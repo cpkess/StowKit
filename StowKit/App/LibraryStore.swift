@@ -89,6 +89,8 @@ final class LibraryStore {
     private(set) var organizeItems: [InboxBatchItem] = []
     private(set) var exportProgress: (done: Int, total: Int)?
     var exportResult: ExportResult?
+    private(set) var paperlessProgress: (done: Int, total: Int)?
+    var paperlessSummary: String?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
     var isOrganizingInbox = false
     var showOrganizeInbox = false
@@ -626,6 +628,46 @@ final class LibraryStore {
         }
     }
     func cancelExport() { exportTask?.cancel() }
+
+    // MARK: Import from paperless-ngx
+
+    /// Imports a paperless-ngx `document_exporter` folder: each original through the normal importer
+    /// (duplicates are skipped by fingerprint), then its paperless details. See `applyPaperless`.
+    func importPaperless() {
+        guard allowCloudEdit(), let importer, let repository, paperlessProgress == nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.prompt = "Import"
+        panel.message = "Choose the folder paperless-ngx’s document exporter wrote (it contains manifest.json)."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        let scoped = folder.startAccessingSecurityScopedResource()
+        let sources: [PaperlessDocument]
+        do { sources = try PaperlessExport.read(folder) }
+        catch { if scoped { folder.stopAccessingSecurityScopedResource() }; errorMessage = error.localizedDescription; return }
+        paperlessProgress = (0, sources.count)
+        Task {
+            defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
+            var imported = 0, duplicates = 0, failures: [String] = []
+            for (index, source) in sources.enumerated() {
+                paperlessProgress = (index, sources.count)
+                let name = source.title.isEmpty ? source.file : source.title
+                do {
+                    let result = try await importer.importFile(folder.appendingPathComponent(source.file))
+                    if result.isDuplicate { duplicates += 1; continue }
+                    try repository.applyPaperless(source, to: result.document.id)
+                    imported += 1
+                } catch { failures.append("\(name): \(error.localizedDescription)") }
+            }
+            paperlessProgress = nil
+            var summary = "Imported \(imported) \(imported == 1 ? "document" : "documents") from paperless-ngx."
+            if duplicates > 0 { summary += " \(duplicates) \(duplicates == 1 ? "was" : "were") already in StowKit and left as they were." }
+            if !failures.isEmpty { summary += "\n\nNot imported:\n" + failures.prefix(20).joined(separator: "\n") + (failures.count > 20 ? "\n…and \(failures.count - 20) more." : "") }
+            paperlessSummary = summary
+            refreshProcessingOverview(); refreshTextSearch()
+            if processingEnabled { processor?.start(); intelligenceProcessor?.start() }
+            syncNow()
+        }
+    }
 
     // MARK: Organize Inbox (batch)
 
