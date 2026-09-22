@@ -1,5 +1,28 @@
 # Validation
 
+## 1.5.0 (11) signed test build on the owner's archive
+
+September 22, 2026, with the owner's go-ahead (the V9 migration is one way). 1.4.0 was quit (no second
+instance) and the signed 1.5.0 test build launched with `open --stderr`:
+
+- **Migration**: the archive opened as V9 with its five documents, and the new Type, Amount, Due, and
+  Expires fields, the Filter menu, Upcoming, Tags, and (after the next step) People & Things all appeared.
+- **Facts from real text**: Suggest Again on the Wood County property tax receipt set its date to June 23,
+  2025 (it had been the import day), type "Payment Confirmation", amount "$4,072.28" (the total including a
+  $99.32 fee), and people & things "Wood County Treasurer, OH", "Christopher Kessler", "Autoagent.com". The
+  title also changed ("Payment Confirmation for Real Estate"), as automatic titles may.
+- **Filters**: clicking "Wood County Treasurer" in People & Things showed 1 of 1 documents with an
+  "About:" chip and Save View; removing the chip restored all five.
+- **A warning, reproduced**: "Application performed a reentrant operation in its NSTableView delegate. This
+  warning will become an assert in the future." AppKit logs it once per launch, so each action was tested on a
+  fresh launch: not on idle launch, not on applying a filter from the sidebar, but on removing the filter
+  chip and, separately, on clearing a search. Both grow the list back while a document is selected. Search
+  clearing predates 1.5, but whether 1.4.0 logged it is unknown: it can't open the migrated archive to check.
+
+**Not established.** Export was not run on the real archive: its folder picker needs full-screen control,
+and the approval timed out. No reminder was created, no paperless export imported, and multi-select, saved
+views, and tag renaming were not exercised here. The reentrancy cause is not identified.
+
 ## Reminders and Upcoming (unreleased)
 
 September 21, 2026. A document with a due or expiry date shows "Due <date> · Add Reminder" (and the same

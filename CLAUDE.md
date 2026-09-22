@@ -193,6 +193,9 @@ both places. Don't "simplify" that away.
 - **Collection evidence is compared by words, not characters.** The model reflows its quotes
   (spacing, punctuation, words joined across lines); an exact match rejected 3 of 4 correct
   collections on the owner's documents. See `UnderstandingPolicy.evidenceSupported`.
+- **Open: an NSTableView reentrancy warning** ("will become an assert") when the document list grows back
+  while a document is selected (clearing a search or a filter chip). Logged once per launch, so test one
+  action per fresh launch with `open --stderr`. Cause not yet identified.
 - **Check for a second running instance** (`pgrep -lf StowKit.app`) after quitting test builds:
   `osascript quit` once stopped only one of two, leaving both on the same archive and iCloud.
 - Confidence-based filing is a conservative heuristic, not a calibrated probability. Analysis
