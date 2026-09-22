@@ -1,5 +1,36 @@
 # Validation
 
+## Share → StowKit extension (unreleased)
+
+September 21, 2026. A new `StowKitShare` app-extension target (`com.stowkit.app.share`, share
+services) is embedded in the app. Shared PDFs and images (Finder, Preview, Mail…) are copied, and a
+shared web address (Safari and others) is loaded off screen in WebKit and saved as a paginated PDF
+titled after the page, into `Shared Inbox` in the App Group container
+`WZJ4ZPRH72.com.stowkit.app` (team-prefixed, so no provisioning profile is needed). Files are written
+under a hidden name and renamed, so the importer never takes a partial file. The extension then posts
+a distributed notification; the app imports the folder's files into Inbox (on that notification,
+every 30 s, and at launch), deleting each staging copy once imported. Web pages load without the
+owner's Safari cookies, so a page behind a login saves as its login page.
+
+Build: the hand-written project gained the target, an Embed Foundation Extensions phase, and a shared
+`Shared/ShareDropbox.swift` compiled into both targets. `build-distribution.sh` now chooses Info.plist and
+entitlements per target (the local config sets the app's for every target) and refuses an export whose
+extension isn't team-signed or lacks the App Group. Signed 1.4.0 (10) export: all checks passed; the
+extension is Developer ID, hardened runtime, universal, sandboxed with the App Group and network
+client. After launch, `pluginkit` listed `com.stowkit.app.share(1.4.0)` and the app had created
+`Shared Inbox`.
+
+`ShareExtensionTests`, 5 tests, pass: hidden-then-rename placement and " 2" numbering, no residue after
+a failed write, safe filenames from page titles, a 2,000-point page cut into three 612×792 pages with
+text still extractable in order, and the drop folder deleting (not trashing) an imported file. They
+write to temporary folders, never the real drop folder the running app watches. Full suite: 154 tests,
+0 failures.
+
+**Not established.** The extension has not yet run: a test driver asking
+`NSSharingService.sharingServices(forItems:)` for a web URL and a PDF was not offered StowKit, because
+macOS leaves a new share extension disabled until the owner enables it in System Settings. WebKit
+rendering, the off-screen page load, and the hand-off to a running app are therefore untested.
+
 ## Organize Inbox: batch suggestions and filing (unreleased)
 
 September 21, 2026. Organize Inbox… (button under the Inbox list, and File → ⇧⌘I) opens a window

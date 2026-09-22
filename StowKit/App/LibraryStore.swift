@@ -77,6 +77,8 @@ final class LibraryStore {
     @ObservationIgnored private var importer: DocumentImporter?
     @ObservationIgnored private var pendingURLs: [URL] = []
     @ObservationIgnored private var inboxFolder: InboxFolder?
+    @ObservationIgnored private var sharedInbox: InboxFolder?
+    @ObservationIgnored private var shareObserver: NSObjectProtocol?
     private(set) var inboxFolderURL: URL?
     private(set) var inboxFolderStatus = ""
     private(set) var filingRules: [FilingRule] = []
@@ -154,7 +156,8 @@ final class LibraryStore {
     func shutdownForSwitch() async {
         cloudTimer?.cancel(); searchTask?.cancel()
         await cloudCoordinator?.stop(); await processor?.stop(); await intelligenceProcessor?.stop()
-        inboxFolder?.stop()
+        inboxFolder?.stop(); sharedInbox?.stop()
+        if let shareObserver { DistributedNotificationCenter.default().removeObserver(shareObserver); self.shareObserver = nil }
         if let accountObserver { NotificationCenter.default.removeObserver(accountObserver); self.accountObserver = nil }
     }
     func syncNow() { cloudCoordinator?.schedule() }
@@ -228,6 +231,17 @@ final class LibraryStore {
         refreshInboxFolderState()
     }
     func stopUsingInboxFolder() { inboxFolder?.stopUsing() }
+    /// Documents sent with Share → StowKit wait in the App Group drop folder until imported:
+    /// immediately when the extension posts its notification, or on the next launch.
+    private func startSharedInbox(_ importer: DocumentImporter) {
+        guard !cloudReadOnly, !cloudAccessSuspended, let folder = ShareDropbox.folder else { return }
+        sharedInbox = InboxFolder(importer: importer, fixedFolder: folder,
+                                  onImported: { [weak self] in self?.inboxDidImport($0) }, onChange: {})
+        sharedInbox?.start()
+        shareObserver = DistributedNotificationCenter.default().addObserver(forName: ShareDropbox.notification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in await self?.sharedInbox?.scan() }
+        }
+    }
     func checkInboxFolder() { Task { await inboxFolder?.scan() } }
     private func refreshInboxFolderState() {
         inboxFolderURL = inboxFolder?.url; inboxFolderStatus = inboxFolder?.status ?? ""
@@ -346,6 +360,7 @@ final class LibraryStore {
                                           onChange: { [weak self] in self?.refreshInboxFolderState() })
                 refreshInboxFolderState()
                 if !cloudReadOnly && !cloudAccessSuspended { inboxFolder?.start() }
+                startSharedInbox(importer)
             }
         } catch { startupError = error.localizedDescription }
     }

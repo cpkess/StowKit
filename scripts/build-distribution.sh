@@ -41,6 +41,14 @@ DEVELOPMENT_TEAM = $team_id
 ENABLE_HARDENED_RUNTIME = YES
 STOWKIT_CLOUD_ENVIRONMENT = Production
 SWIFT_ACTIVE_COMPILATION_CONDITIONS =
+// The local config sets the app's Info.plist and entitlements for every target; the Share
+// extension needs its own. Chosen per target, as Config/iCloud.tests.xcconfig does.
+STOWKIT_ENTITLEMENTS_StowKit = Config/StowKitCloud.entitlements
+STOWKIT_ENTITLEMENTS_StowKitShare = StowKitShare/StowKitShare.entitlements
+CODE_SIGN_ENTITLEMENTS = \$(STOWKIT_ENTITLEMENTS_\$(TARGET_NAME))
+STOWKIT_PLIST_StowKit = Config/StowKitCloud-Info.plist
+STOWKIT_PLIST_StowKitShare = StowKitShare/Info.plist
+INFOPLIST_FILE = \$(STOWKIT_PLIST_\$(TARGET_NAME))
 CONFIG
 xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Release \
     -destination 'generic/platform=macOS' -xcconfig "$output_dir/Distribution.xcconfig" \
@@ -68,5 +76,11 @@ fi
 /usr/bin/plutil -extract SUFeedURL raw "$app_path/Contents/Info.plist" | /usr/bin/grep -q 'releases/latest/download/appcast.xml'
 /usr/bin/plutil -extract SUPublicEDKey raw "$app_path/Contents/Info.plist" >/dev/null
 codesign -d --verbose=4 "$app_path/Contents/Frameworks/Sparkle.framework" 2>&1 | /usr/bin/grep "TeamIdentifier=$team_id" >/dev/null
+# The Share extension must be embedded, Developer ID signed by the team, and sandboxed with the App Group.
+share_path="$app_path/Contents/PlugIns/StowKitShare.appex"
+codesign -d --verbose=4 "$share_path" 2>&1 | /usr/bin/grep "TeamIdentifier=$team_id" >/dev/null
+codesign -d --entitlements - --xml "$share_path" > "$output_dir/share-entitlements.plist"
+/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$output_dir/share-entitlements.plist" | /usr/bin/grep -qx "$team_id.com.stowkit.app"
+/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$output_dir/entitlements.plist" | /usr/bin/grep -qx "$team_id.com.stowkit.app"
 echo "Developer ID export verified: $app_path"
 echo "Notarize and staple the app before creating its distribution DMG."

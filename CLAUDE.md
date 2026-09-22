@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.3.0, build 9 (released 2026-09-21). The app icon is
+- Deployment target macOS 14.0. Current version 1.4.0, build 10 (unreleased; 1.3.0 released 2026-09-21). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
@@ -221,6 +221,11 @@ both places. Don't "simplify" that away.
 - **The project file is hand-written.** Settings Xcode templates add by default can be missing:
   `LD_RUNPATH_SEARCH_PATHS` was, and the first Sparkle build crashed at launch. Launch the signed
   build before calling anything done.
+- **Two targets now: the app and `StowKitShare`** (Share extension). Anything setting Info.plist or
+  entitlements through an xcconfig must pick per `$(TARGET_NAME)`, as `build-distribution.sh` and
+  `iCloud.tests.xcconfig` do, or the extension is signed as the app. Versions are set in both targets'
+  configs; bump them together. `Shared/ShareDropbox.swift` is compiled into both. Tests must never
+  write to `ShareDropbox.folder`: the running app imports whatever lands there.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 
@@ -247,7 +252,7 @@ Earlier list, roughly in the order Codex intended:
 5. Tombstone-based permanent deletion is built; still missing are authoritative reconciliation after a
    token reset, and live two-Mac verification.
 6. Not yet started from the brief: entities, related documents, reminders, semantic search,
-   Spotlight, App Intents, Share Extension, iOS companion.
+   Spotlight, App Intents, iOS companion. (Share extension: built, 1.4.0.)
 
 ## Working with the owner
 

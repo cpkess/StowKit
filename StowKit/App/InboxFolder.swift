@@ -19,11 +19,23 @@ import UniformTypeIdentifiers
     /// Files that failed, by path and modification date, so a bad file isn't retried every scan
     /// but a replaced one is.
     private var failed: [String: Date] = [:]
+    /// The Share extension's drop folder holds StowKit's own staging copies, so imported files
+    /// are deleted there; a folder the owner chose gets its files moved to the Trash instead.
+    private let removesImported: Bool
 
     init(importer: DocumentImporter, defaults: UserDefaults = .standard,
          onImported: @escaping (ImportResult) -> Void, onChange: @escaping () -> Void) {
         self.importer = importer; self.defaults = defaults; self.onImported = onImported; self.onChange = onChange
+        removesImported = false
         url = resolveBookmark()
+    }
+    /// A folder StowKit owns (the Share extension's drop folder): no bookmark, nothing remembered.
+    init(importer: DocumentImporter, fixedFolder: URL, onImported: @escaping (ImportResult) -> Void, onChange: @escaping () -> Void) {
+        self.importer = importer; defaults = UserDefaults(suiteName: "StowKitUnused") ?? .standard
+        self.onImported = onImported; self.onChange = onChange
+        removesImported = true
+        try? FileManager.default.createDirectory(at: fixedFolder, withIntermediateDirectories: true)
+        url = fixedFolder
     }
 
     func use(_ folder: URL) throws {
@@ -69,7 +81,8 @@ import UniformTypeIdentifiers
                 let result = try await importer.importFile(file)
                 // The original is verified into the archive (or already there), so the inbox
                 // copy is surplus. Trash, not delete: it stays recoverable.
-                try FileManager.default.trashItem(at: file, resultingItemURL: nil)
+                if removesImported { try FileManager.default.removeItem(at: file) }
+                else { try FileManager.default.trashItem(at: file, resultingItemURL: nil) }
                 if !result.isDuplicate { imported += 1 }
                 failed[file.path] = nil
                 onImported(result)

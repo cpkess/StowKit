@@ -19,8 +19,10 @@
 
 STOWKIT_ENTITLEMENTS_StowKit = Config/StowKitCloud.entitlements
 STOWKIT_ENTITLEMENTS_StowKitTests =
+STOWKIT_ENTITLEMENTS_StowKitShare = StowKitShare/StowKitShare.entitlements
 CODE_SIGN_ENTITLEMENTS = $(STOWKIT_ENTITLEMENTS_$(TARGET_NAME))
 
 STOWKIT_PLIST_StowKit = Config/StowKitCloud-Info.plist
 STOWKIT_PLIST_StowKitTests =
+STOWKIT_PLIST_StowKitShare = StowKitShare/Info.plist
 INFOPLIST_FILE = $(STOWKIT_PLIST_$(TARGET_NAME))
