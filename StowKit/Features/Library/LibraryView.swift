@@ -39,6 +39,7 @@ struct LibraryView: View {
                             .tag(LibraryDestination.collection(collection.name))
                     }
                 }
+                SidebarExtras(library: library)
                 Section {
                     Label("Trash", systemImage: "trash").badge(library.trashCount).tag(LibraryDestination.trash)
                 }
@@ -67,6 +68,7 @@ struct LibraryView: View {
                             .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Clear Search")
                     }
                 }.padding(9).background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6)).padding(12)
+                if library.isReady { FilterBar(library: library) }
                 Divider()
                 if let failure = library.startupError {
                     ContentUnavailableView {

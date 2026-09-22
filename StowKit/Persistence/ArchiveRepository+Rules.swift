@@ -60,4 +60,49 @@ extension ArchiveRepository {
         } catch { context.rollback(); throw error }
         return changed
     }
+
+    // MARK: Saved views, stored the same way
+
+    private static let savedViewsKey = "saved-views-v1"
+    func savedViews() throws -> [SavedView] {
+        let key = Self.savedViewsKey
+        guard let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first,
+              let data = row.value.data(using: .utf8), !data.isEmpty else { return [] }
+        return try JSONDecoder().decode([SavedView].self, from: data)
+    }
+    func saveSavedViews(_ views: [SavedView]) throws {
+        let key = Self.savedViewsKey
+        let value = String(decoding: try JSONEncoder().encode(views), as: UTF8.self)
+        do {
+            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = value }
+            else { context.insert(Checkpoint(key, value: value)) }
+            try save()
+        } catch { context.rollback(); throw error }
+    }
+
+    // MARK: Tags across the archive
+
+    /// Renames a tag on every document outside Trash ("" removes it), matching without case. It is
+    /// the owner's edit, so it goes through `update`: protected from suggestions and synced.
+    @discardableResult
+    func renameTag(_ old: String, to new: String) throws -> Int {
+        let key = old.trimmingCharacters(in: .whitespaces).lowercased()
+        let replacement = new.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: " ")
+        guard !key.isEmpty else { return 0 }
+        var changed = 0
+        for record in try context.fetch(FetchDescriptor<Record>()) {
+            var document = record.document
+            guard document.trashedAt == nil, document.tagList.contains(where: { $0.lowercased() == key }) else { continue }
+            var tags: [String] = []
+            for tag in document.tagList {
+                let value = tag.lowercased() == key ? replacement : tag
+                if !value.isEmpty, !tags.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) { tags.append(value) }
+            }
+            document.tags = tags.joined(separator: ", ")
+            document.modifiedAt = Date()
+            try update(document)
+            changed += 1
+        }
+        return changed
+    }
 }

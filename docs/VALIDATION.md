@@ -1,5 +1,25 @@
 # Validation
 
+## Tags, filters, and saved views (unreleased)
+
+September 21, 2026. A Filter menu under the search field narrows any view by tag, sender, type, date
+(last 30 days, this year, last year, or a year), due or expiring (overdue, due in 30 days, expiring in
+90), or "not in a collection"; active filters show as removable chips and combine with the sidebar place
+and search text. Save View… keeps place, search, and filters in a new Saved sidebar section (per Mac,
+like rules). A Tags sidebar section lists the most used tags with counts; each can be renamed or removed
+across the archive (outside Trash), as the owner's edit, so protected and synced. Tags are still stored
+and synced as comma-separated text; only the search index treats them as items. The index gained
+sender, type, date, due, and expiry columns and a `tags` table; its identity moved to ":2", so existing
+indexes rebuild from saved data on first launch.
+
+`FilterTests`, 4 tests, pass: every filter kind alone, filters combined with search and with a
+collection, case-insensitive tags and senders, Trash excluded, facet counts, tag rename merging and
+removal with protection, and saved views surviving a reopen. Mutation check: with the filter conditions
+left out of the query, the filter test fails. Full suite: 171 tests, 0 failures.
+
+**Not established.** Not seen in the running app yet (see the V9 note above). If the search index
+cannot be written, the browse fallback ignores filters.
+
 ## Dates, amounts, and document types (unreleased)
 
 September 21, 2026. Schema V9 adds `documentType`, `amount` (as written), `dueDate`, and `expiresAt`

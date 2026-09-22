@@ -22,6 +22,9 @@ final class LibraryStore {
     var destination: LibraryDestination? = .recent { didSet { selectedOverride = nil; refreshTextSearch() } }
     var selection: UUID?
     var search = "" { didSet { selectedOverride = nil; refreshTextSearch() } }
+    var filter = LibraryFilter() { didSet { if filter != oldValue { selectedOverride = nil; refreshTextSearch() } } }
+    private(set) var facets = LibraryFacets()
+    private(set) var savedViews: [SavedView] = []
     var errorMessage: String?
     var cloudStatus = "iCloud is off"
     var cloudHasError = false
@@ -198,6 +201,32 @@ final class LibraryStore {
         } catch { cloudStatus = error.localizedDescription; cloudHasError = true }
     }
 
+    // MARK: Saved views and tags
+
+    func apply(_ view: SavedView) {
+        destination = view.destination; search = view.query; filter = view.filter
+    }
+    func saveCurrentView(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        storeViews(savedViews + [SavedView(name: trimmed, destination: destination ?? .recent, query: search, filter: filter)])
+    }
+    func deleteSavedView(_ id: UUID) { storeViews(savedViews.filter { $0.id != id }) }
+    private func storeViews(_ views: [SavedView]) {
+        do { try repository?.saveSavedViews(views); savedViews = views }
+        catch { errorMessage = "Your saved views could not be saved.\n\n\(error.localizedDescription)" }
+    }
+    func showTag(_ tag: String) { destination = .recent; search = ""; filter = LibraryFilter(tag: tag) }
+    func renameTag(_ old: String, to new: String) {
+        guard allowCloudEdit(), let repository else { return }
+        do {
+            let changed = try repository.renameTag(old, to: new)
+            if filter.tag?.caseInsensitiveCompare(old) == .orderedSame { filter.tag = new.isEmpty ? nil : new }
+            lastImportMessage = "\(new.isEmpty ? "Removed" : "Renamed") the tag on \(changed) \(changed == 1 ? "document" : "documents")"
+            refreshTextSearch(resetLimit: false); syncNow()
+        } catch { errorMessage = "The tag could not be changed.\n\n\(error.localizedDescription)" }
+    }
+
     // MARK: Filing rules
 
     func saveRule(_ rule: FilingRule) {
@@ -327,6 +356,7 @@ final class LibraryStore {
             await purgeDeletedFiles()
             collections = try repository.collections()
             filingRules = (try? repository.filingRules()) ?? []
+            savedViews = (try? repository.savedViews()) ?? []
             let container = repository.container
             textSearchService = await Task.detached { TextSearchService(modelContainer: container) }.value
             do { try await textSearchService?.configure(root: storage.root, archiveID: repository.archiveID) }
@@ -708,14 +738,14 @@ final class LibraryStore {
         searchGeneration += 1
         let generation = searchGeneration
         if resetLimit { pageLimit = 50 }
-        let query = search, scope = destination, sort = newestFirst, limit = pageLimit
+        let query = search, scope = destination, sort = newestFirst, limit = pageLimit, narrowing = filter
         textSearchError = nil
         guard let service = textSearchService, isReady, !isRebuildingIndex else { isSearchingText = false; return }
         isSearchingText = true
         searchTask = Task {
             do {
                 try await Task.sleep(for: .milliseconds(150))
-                let page = try await service.search(query, destination: scope, newestFirst: sort, limit: limit)
+                let page = try await service.search(query, destination: scope, filter: narrowing, newestFirst: sort, limit: limit)
                 guard !Task.isCancelled, searchGeneration == generation else { return }
                 documents = page.hits.map(\.document)
                 if documents.contains(where: { $0.id == selectedOverride?.id }) { selectedOverride = nil }
@@ -726,6 +756,7 @@ final class LibraryStore {
                 isSearchingText = false
                 isLoadingMore = false
                 reconcileSelection()
+                if let facets = try? await service.facets(), searchGeneration == generation { self.facets = facets }
             } catch is CancellationError { }
             catch {
                 guard searchGeneration == generation else { return }

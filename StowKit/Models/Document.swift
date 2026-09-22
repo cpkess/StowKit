@@ -21,7 +21,7 @@ struct LibraryCollection: Identifiable, Hashable, Codable, Sendable {
     ]
 }
 
-enum LibraryDestination: Hashable {
+enum LibraryDestination: Hashable, Codable, Sendable {
     case inbox, recent, favorites, trash, collection(String)
     var title: String {
         switch self {

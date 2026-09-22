@@ -83,10 +83,10 @@ import SwiftData
             }
         }
     }
-    func search(_ query: String, destination: LibraryDestination?, newestFirst: Bool, offset: Int = 0, limit: Int = 50) throws -> SearchPage {
+    func search(_ query: String, destination: LibraryDestination?, filter: LibraryFilter = LibraryFilter(), newestFirst: Bool, offset: Int = 0, limit: Int = 50) throws -> SearchPage {
         try synchronize()
         guard let index else { throw ArchiveError.missingRecord }
-        let result = try index.search(query, destination: destination, newestFirst: newestFirst, offset: offset, limit: limit)
+        let result = try index.search(query, destination: destination, filter: filter, newestFirst: newestFirst, offset: offset, limit: limit)
         let ids = result.rows.compactMap { UUID(uuidString: $0[0]) }
         let context = ModelContext(modelContainer)
         let documents = try context.fetch(FetchDescriptor<Record>(predicate: #Predicate { ids.contains($0.id) }))
@@ -96,6 +96,11 @@ import SwiftData
         }, total: result.total, statistics: try index.statistics())
     }
 
+    func facets() throws -> LibraryFacets {
+        try synchronize()
+        guard let index else { throw ArchiveError.missingRecord }
+        return try index.facets()
+    }
     /// Browsing remains available if the disposable index cannot be written.
     func browse(destination: LibraryDestination?, newestFirst: Bool, limit: Int = 50) throws -> SearchPage {
         let context = ModelContext(modelContainer)
