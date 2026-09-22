@@ -26,10 +26,30 @@ text still extractable in order, and the drop folder deleting (not trashing) an 
 write to temporary folders, never the real drop folder the running app watches. Full suite: 154 tests,
 0 failures.
 
-**Not established.** The extension has not yet run: a test driver asking
-`NSSharingService.sharingServices(forItems:)` for a web URL and a PDF was not offered StowKit, because
-macOS leaves a new share extension disabled until the owner enables it in System Settings. WebKit
-rendering, the off-screen page load, and the hand-off to a running app are therefore untested.
+**Run, same day, after the owner enabled the extension.** A compiled driver calling
+`NSSharingService.sharingServices(forItems:)` and `perform(withItems:)` (the Share menu's path),
+with StowKit quit so nothing reached the archive:
+
+- Still not offered at first, even enabled. Three registrations existed: the Developer ID export,
+  the Debug build, and Xcode's archive-intermediate copy (development-signed; the one `pluginkit`
+  had chosen). With the other two removed (`pluginkit -r`) and the export added (`pluginkit -a`),
+  "StowKit" appeared in the list. The dictionary activation rule was also replaced by an explicit
+  predicate (URLs, file URLs, images, PDFs, up to 20), matching Apple's Notes extension; which of the
+  two changes was decisive was not isolated.
+- `https://example.com` saved as `Example Domain.pdf`, text extractable, but on two pages: the
+  off-screen view was 1,200 points tall and a page 1,165, so every page overflowed. With the view set
+  to one page height, the same page saved as one 900×1165 page ("Example Domain 2.pdf": the live
+  clash-numbering worked too).
+- A disposable PDF was copied byte-for-byte (`cmp`).
+- `https://en.wikipedia.org/wiki/Paper` saved as `Paper - Wikipedia.pdf`, 10 pages, text in order;
+  pages 1–3 viewed: faithful rendering, but one lazily loaded image below the fold was blank.
+
+**Not established.** The hand-off to a running StowKit (notification → import) was not run live,
+because the test files would have entered the owner's archive; it is covered by
+`testTheDropFolderDeletesImportedFilesRatherThanTrashingThem` only. The shell could read the App
+Group folder but not delete from it ("Operation not permitted"), so the four test files had to be
+removed by the owner before StowKit's next launch. Pages behind a login and lazily loaded images are
+known gaps.
 
 ## Organize Inbox: batch suggestions and filing (unreleased)
 

@@ -3,7 +3,9 @@ import WebKit
 
 /// Loads a web page off screen and turns it into a paginated PDF (see `PDFPaginator`).
 @MainActor final class WebPagePDF: NSObject, WKNavigationDelegate {
-    private let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 1200))
+    // Exactly one letter-proportioned page tall (900 × 11 / 8.5): a page never renders shorter than
+    // the view, so a taller view pushed even a short page onto a nearly blank second one.
+    private let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 1165))
     private var loaded: CheckedContinuation<Void, Error>?
 
     func render(_ url: URL) async throws -> (data: Data, title: String) {

@@ -226,6 +226,10 @@ both places. Don't "simplify" that away.
   `iCloud.tests.xcconfig` do, or the extension is signed as the app. Versions are set in both targets'
   configs; bump them together. `Shared/ShareDropbox.swift` is compiled into both. Tests must never
   write to `ShareDropbox.folder`: the running app imports whatever lands there.
+- **Stale extension registrations hide Share → StowKit.** Xcode registers the archive-intermediate and
+  Debug copies too, and `pluginkit` may choose a development-signed one that the Share menu then
+  omits. Check `pluginkit -m -v -i com.stowkit.app.share`; remove extras with `pluginkit -r <path>`.
+  The App Group folder is readable from the shell but not writable, so never leave test files in it.
 - Token-expiry full scans retain absent local records — that is *not* authoritative deletion
   reconciliation, and shouldn't be described as such.
 
