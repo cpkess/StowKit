@@ -1,5 +1,21 @@
 # Validation
 
+## 1.6.1 (13) release build
+
+September 23, 2026, owner's Mac. `build-distribution.sh` (Developer ID, Production) reported 1.6.1 (13)
+and passed its checks; app and signed DMG notarized, stapled and accepted by Gatekeeper. The `.sha256`
+was regenerated after stapling; the appcast was signed and its length matches the DMG (6,371,722
+bytes). The live feed serves 1.6.1 / build 13, and the DMG downloaded from GitHub matches the checksum
+and is accepted by Gatekeeper. The stapled app launched on the owner's real archive with iCloud
+connected before the DMG was built. Full suite before the build: 194 tests, 0 failures.
+
+**Sparkle self-update, second time verified:** the installed 1.6.0 offered 1.6.1, downloaded and
+installed it, and /Applications/StowKit.app now reads 1.6.1 (13), still Developer ID signed, running as
+a single instance. No password was asked for.
+
+**Not established.** Only 1.5.0 → 1.6.0 → 1.6.1 hops on the Mac that built them; no other Mac, no Mac
+without Apple Intelligence, and no two-Mac sync of pages a model read.
+
 ## OCR falls back to fast recognition, then Apple Intelligence (unreleased)
 
 September 22, 2026, owner's Mac (macOS 27), against the owner's real archive of 24 originals.
