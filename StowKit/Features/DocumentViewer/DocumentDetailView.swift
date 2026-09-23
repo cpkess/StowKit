@@ -9,6 +9,7 @@ struct DocumentDetailView: View {
     let openCopy: () -> Void
     let trashOrRestore: () -> Void
     let processing: ProcessingSnapshot?
+    var readByModel = false
     let textService: TextSearchService?
     let retryProcessing: (Bool) -> Void
     let analysis: AnalysisSnapshot?
@@ -154,13 +155,14 @@ struct DocumentDetailView: View {
         parts.append(document.formatLabel + (document.isImage ? " image" : " document"))
         return parts.joined(separator: " · ")
     }
-    /// A failed or in-progress read is something to act on or wait for, so it stays in view.
+    /// A failed or in-progress read is something to act on or wait for, and text a model read is
+    /// something to check, so all three stay in view instead of hiding under More Details.
     private var processingNeedsAttention: Bool {
-        processing?.state == .failed || processing?.state.isActive == true
+        processing?.state == .failed || processing?.state.isActive == true || readByModel
     }
     private var processingInspector: some View {
         ProcessingInspector(documentID: document.id, snapshot: processing, service: textService,
-            isTrashed: document.trashedAt != nil, retry: retryProcessing)
+            isTrashed: document.trashedAt != nil, readByModel: readByModel, retry: retryProcessing)
     }
     private var collectionsControl: some View {
         HStack(spacing: 6) {

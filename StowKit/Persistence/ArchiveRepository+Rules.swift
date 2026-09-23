@@ -8,6 +8,16 @@ extension ArchiveRepository {
 
     func filingRules() throws -> [FilingRule] { try storedJSON(Self.rulesKey) ?? [] }
     func saveFilingRules(_ rules: [FilingRule]) throws { try storeJSON(rules, Self.rulesKey) }
+    /// The text read from a document, up to a limit, in page order.
+    func pageText(_ id: UUID, limit: Int) throws -> String {
+        var text = ""
+        let pages = FetchDescriptor<Page>(predicate: #Predicate { $0.documentID == id }, sortBy: [SortDescriptor(\.pageIndex)])
+        for page in try context.fetch(pages) {
+            text += page.text + "\n"
+            if text.count >= limit { break }
+        }
+        return text
+    }
     func filingRuleInput(_ document: HouseholdDocument) throws -> FilingRuleInput {
         let id = document.id
         var text = ""
@@ -66,6 +76,28 @@ extension ArchiveRepository {
     func addedReminders() throws -> [String: String] { try storedJSON(Self.remindersKey) ?? [:] }
     func saveAddedReminders(_ reminders: [String: String]) throws { try storeJSON(reminders, Self.remindersKey) }
 
+    // MARK: Pages Apple Intelligence read from the image, per document
+
+    private static let modelReadKey = "model-read-pages-v1"
+    /// Document ID to the page indexes a model read. Local: the sync format carries no such field,
+    /// and a Mac on an older version rejects any field it does not know.
+    func modelReadPages() throws -> [String: [Int]] { try storedJSON(Self.modelReadKey) ?? [:] }
+    func wasReadByModel(_ id: UUID) -> Bool { ((try? modelReadPages())?[id.uuidString]?.isEmpty == false) }
+    /// Called inside the transaction that saves the page, so the note and the text commit together.
+    func noteModelRead(_ id: UUID, page: Int) throws {
+        var pages = try modelReadPages()
+        var indexes = pages[id.uuidString] ?? []
+        guard !indexes.contains(page) else { return }
+        indexes.append(page)
+        pages[id.uuidString] = indexes.sorted()
+        try writeJSON(pages, Self.modelReadKey)
+    }
+    func forgetModelRead(_ id: UUID) throws {
+        var pages = try modelReadPages()
+        guard pages.removeValue(forKey: id.uuidString) != nil else { return }
+        try storeJSON(pages, Self.modelReadKey)
+    }
+
     /// Per-Mac settings kept as JSON in a checkpoint row: no schema change, not synced.
     private func storedJSON<T: Decodable>(_ key: String) throws -> T? {
         guard let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first,
@@ -73,12 +105,14 @@ extension ArchiveRepository {
         return try JSONDecoder().decode(T.self, from: data)
     }
     private func storeJSON<T: Encodable>(_ value: T, _ key: String) throws {
+        do { try writeJSON(value, key); try save() }
+        catch { context.rollback(); throw error }
+    }
+    /// The write without the save, for callers already inside a transaction.
+    private func writeJSON<T: Encodable>(_ value: T, _ key: String) throws {
         let text = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-        do {
-            if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = text }
-            else { context.insert(Checkpoint(key, value: text)) }
-            try save()
-        } catch { context.rollback(); throw error }
+        if let row = try context.fetch(FetchDescriptor<Checkpoint>(predicate: #Predicate { $0.key == key })).first { row.value = text }
+        else { context.insert(Checkpoint(key, value: text)) }
     }
 
     // MARK: Tags across the archive

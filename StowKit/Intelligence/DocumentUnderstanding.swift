@@ -80,7 +80,18 @@ enum UnderstandingPolicy {
         let present = Set(source)
         return quote.count >= 3 && quote.allSatisfy(present.contains)
     }
-    static func merge(_ result: DocumentUnderstanding, into document: HouseholdDocument, protected: Set<String>, explicit: Bool = false) -> HouseholdDocument {
+    /// Filing automatically needs text worth trusting. Two lines off a scan, or a transcription a
+    /// language model produced, can support a confident and wrong conclusion — a birth certificate
+    /// read as "life insurance" — so those documents wait in Inbox for the owner instead.
+    /// `scanned` matters: a PDF whose own text layer holds one line really is a one-line document,
+    /// while a scan that produced one line was mostly missed.
+    static func canFileAutomatically(text: String, readByModel: Bool, scanned: Bool) -> Bool {
+        guard !readByModel else { return false }
+        guard scanned else { return true }
+        return !TextQuality.looksUnusable(text, minimumWords: TextQuality.scannedPageMinimumWords)
+    }
+    static func merge(_ result: DocumentUnderstanding, into document: HouseholdDocument, protected: Set<String>,
+                      explicit: Bool = false, trustworthyText: Bool = true) -> HouseholdDocument {
         var edited = document
         // Dates and an amount were checked against the text in `validated`, so they are filled even
         // when filing is uncertain; the document stays in Inbox for review either way.
@@ -91,7 +102,7 @@ enum UnderstandingPolicy {
         // that is still the import default (the import day). Accepting explicitly may replace any.
         if !protected.contains("documentDate"), let day = result.issuedOn.flatMap(DocumentFacts.date),
            explicit || Calendar.current.isDate(document.documentDate, inSameDayAs: document.importedAt) { edited.documentDate = day }
-        guard explicit || result.confidence >= filingThreshold else {
+        guard explicit || (trustworthyText && result.confidence >= filingThreshold) else {
             if !protected.contains("review") { edited.needsReview = true }
             return edited
         }
@@ -107,6 +118,7 @@ enum UnderstandingPolicy {
             edited.entities = list.joined(separator: ", ")
         }
         if !protected.contains("review") { edited.needsReview = explicit ? false : result.confidence < filingThreshold }
+
         return edited
     }
 }

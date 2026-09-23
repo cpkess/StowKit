@@ -171,6 +171,24 @@ both places. Don't "simplify" that away.
   sandboxed app's `NSLog` and `Logger` output did not show up in `log show`, which made two
   rounds of probes look like they never ran. XCTest can't catch this: its host renders no
   library view.
+- **macOS text recognition at `.accurate` works once per process on this Mac, then fails for the rest
+  of that process's life** (`e5rt_execution_stream_operation_create_precompiled_compute_operation…`,
+  surfacing as `CRImageReaderError error 1`). Reproduced in a standalone program with no StowKit code;
+  `.fast` keeps working. `OCRService` therefore falls back accurate → fast → Apple Intelligence, and
+  no page is ever lost to a recognition error. Don't "simplify" that chain away.
+- **Apple Intelligence can read a page image** (`SystemLanguageModel` with an `Attachment`, macOS 27)
+  and **it invents names**: on the owner's licences it produced "KESLINGER"/"KEISLER" for Kessler. Text
+  it reads is marked `readByModel`, badged, never filed automatically, and kept per Mac in a checkpoint
+  row — never add it to the sync format without a compatibility plan.
+- **A re-read does not undo an earlier automatic filing.** `UnderstandingPolicy.merge` only ever adds
+  a collection, so a document filed wrongly keeps that collection after Read Text Again (⌥⌘R). Seen on
+  the owner's archive: a birth certificate filed as Insurance kept the chip after its text was fixed.
+- **`OCRDiagnostic`** (Debug builds, `STOWKIT_OCR_DIAGNOSTIC=1`, launched with `open --stderr`) runs the
+  recognition chain over every original in the archive and logs which tier read each one. It is how the
+  two faults above were found; reach for it before guessing about OCR.
+- **The project had no `DEBUG` compilation condition** until 2026-09-22, so every `#if DEBUG` block
+  compiled to nothing and looked like code that never ran. It is set in all four Debug configurations
+  now; if a debug-only block seems dead, check that first.
 - **`e5rt` log lines mean macOS text recognition is degraded.** They name *system* model bundles
   under `/System/Library/PrivateFrameworks/TextRecognition.framework/Resources/`, not any
   StowKit cache (no such cache exists). They were present during the first freeze and may

@@ -116,7 +116,10 @@ extension ArchiveRepository {
     func finishAnalysis(_ id: UUID, revision: Int, result: DocumentUnderstanding) throws {
         guard let job = try analysis(id), job.revision == revision, job.state == "analyzing", var document = try document(id), document.trashedAt == nil else { return }
         let before = document, protected = Set(job.protectedFields)
-        document = UnderstandingPolicy.merge(result, into: document, protected: protected)
+        let text = try pageText(id, limit: FilingRuleInput.textLimit)
+        document = UnderstandingPolicy.merge(result, into: document, protected: protected,
+            trustworthyText: UnderstandingPolicy.canFileAutomatically(text: text, readByModel: wasReadByModel(id),
+                                                                       scanned: (try processingJob(id)?.ocrPages ?? 0) > 0))
         var result = result
         (document, result.rules) = try applyFilingRules(to: document, before: before, protected: protected)
         document.modifiedAt = Date()

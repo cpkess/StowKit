@@ -5,6 +5,15 @@ struct StowKitApp: App {
     @NSApplicationDelegateAdaptor(StowKitAppDelegate.self) private var appDelegate
     @State private var library = LibraryStore(root: CloudSetup.activeRoot)
     @State private var updater = Updater()
+    /// The library, unless a Debug build was asked for the OCR probe instead.
+    @ViewBuilder private var main: some View {
+#if DEBUG
+        if OCRDiagnostic.isRequested { Color.clear.task { OCRDiagnostic.run(root: CloudSetup.activeRoot) } }
+        else { LibraryView(library: library) }
+#else
+        LibraryView(library: library)
+#endif
+    }
     var body: some Scene {
         Window("StowKit", id: "library") {
             Group {
@@ -14,7 +23,7 @@ struct StowKitApp: App {
                 Color.clear.task { await ArchiveMaintenance.run() }
 #else
                 if NSClassFromString("XCTestCase") != nil { Color.clear }
-                else { LibraryView(library: library) }
+                else { main }
 #endif
             }
                 .id(library.storage.root)
@@ -42,6 +51,9 @@ struct StowKitApp: App {
                     NotificationCenter.default.post(name: .stowKitSearch, object: nil)
                 }.keyboardShortcut("f")
                 Divider()
+                Button("Read Text Again") { library.readTextAgain() }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .disabled(!library.isReady || library.selectedIDs.isEmpty)
                 Button("Organize Inbox…") { library.destination = .inbox; library.showOrganizeInbox = true }
                     .keyboardShortcut("i", modifiers: [.command, .shift]).disabled(!library.isReady || library.inboxCount == 0)
                 Button("Import from paperless-ngx…") { library.importPaperless() }

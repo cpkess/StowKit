@@ -1,5 +1,68 @@
 # Validation
 
+## OCR falls back to fast recognition, then Apple Intelligence (unreleased)
+
+September 22, 2026, owner's Mac (macOS 27), against the owner's real archive of 24 originals.
+
+**Root cause of the Inbox failures, reproduced outside StowKit.** Six documents showed "Couldn't read
+text — TextRecognition.CRImageReaderError error 1". A 40-line standalone program with no StowKit code
+shows why: the **first** `VNRecognizeTextRequest` at `.accurate` in a process succeeds (46 s cold,
+correct text) and **every later one fails instantly** with
+`e5rtError("e5rt_execution_stream_operation_create_precompiled_compute_operation_with_options call failed", 13)`,
+while `.fast` keeps working throughout. That is an Apple fault on this Mac, not a property of the
+documents: a probe inside the app over all 24 originals rendered every page correctly and read text
+from all of them at the fast level.
+
+**What was built.** `OCRService.recognize` now tries accurate, falls back to fast on any error, and —
+only when the result is unusable — offers the page image to Apple Intelligence on this Mac
+(`AppleImageTextReader`, `SystemLanguageModel` with an image attachment, macOS 27). `TextQuality`
+judges a read by word shape rather than spelling, and treats a scan that produced fewer than ten words
+as mostly missed. Model text is marked (`readByModel`), badged in the document's details, kept out of
+automatic filing, and stored per Mac in a checkpoint row — the sync format carries no field for it and
+older Macs reject unknown fields. `ExtractionMethod` now decodes an unknown method as `.ocr` instead of
+stalling sync, so a later version can add one.
+
+**On the owner's archive.** All six failing Inbox documents now read text; no "Text unavailable"
+remains. A headless run of the shipping chain over all 24 originals: 21 were read by recognition, and
+**3 by Apple Intelligence** — a marriage licence (35 words, 2.7 s: "Marriage License State of Michigan
+COUNTY OF Oakland…"), a city document (43 words), and a driver's licence (18 words, 2.9 s: "Ohio
+DRIVER LICENSE …"). Timings: fast recognition 0.0–0.2 s per page, the model 0.9–3.0 s.
+
+**The model invents.** On both driver's licences the transcription carried a family name that is not on
+the card — "KESLINGER" and "KEISLER" where the household name is Kessler. This is why model text is
+never filed automatically and is badged for review, and it is the reason to treat such text as a
+search aid rather than a record.
+
+**Two faults this run found in the new code, both fixed.** The first "better answer" rule accepted a
+one-word model reply ("Dillenburg") over eight words of recognition text; it now never trades text for
+less text. And a sparse scan could still be filed automatically: a birth certificate read as
+"CERTIFICATE OF LIVE BIRTH 858046" was filed into Insurance with the summary "Document confirms life
+insurance coverage". Filing now requires text worth trusting, and that rule applies to scans only — a
+PDF's own one-line text layer is still the document.
+
+**Tests.** 194 tests, 0 failures. Seven new ones in `StowKitTests/TextFallbackTests.swift` use real
+recognition output from this archive. Mutation-checked: never asking the model, and accepting any
+readable share, each failed the new tests (5 assertions across 3 tests).
+
+**End to end in the running app, September 23, 2026.** The badge now shows with the document rather
+than under More Details, and File → Read Text Again (⌥⌘R) re-reads the selection. A driver's licence
+in the owner's Inbox, read by the model during an earlier retry, shows: "Needs review — Check the
+title, date, and collection", then "Text ready" with "Text read by Apple Intelligence from the page
+image, because macOS couldn't read it. Check it before relying on the details.", "Searchable text from
+2 pages, all scanned, read on this Mac", and **Collections: None yet** — so the whole path holds:
+the model read it, the note was recorded, the badge is in view, and nothing was filed automatically.
+Its text reads "4C TP1588893 · KESSLER · 1028 HUNTERS RUN PERRYSBURG, OH 43551 …": the surname is
+right here, while several number groups look invented. Re-reading the mis-filed "Certificate of Life"
+corrected it to "Certificate of Live Birth", type "birth certificate", summary "Document confirms live
+birth" — but its earlier automatic collections (Insurance, and now Taxes) remain, because merging only
+ever adds a collection. A re-read does not undo an earlier wrong filing.
+
+**Not established.** The model tier has been seen on 4 real documents and in tests; its accuracy has
+not been measured against the documents' true contents beyond the wrong names noted above. The retry
+added for a model's first call in a process is reasoning from one observation (a licence the model read
+in a second call but not the first), not a proven fix. Nothing here has been tried on another Mac, with
+Apple Intelligence unavailable, or with iCloud sync carrying these pages between Macs.
+
 ## 1.6.0 (12) release build
 
 September 22, 2026, owner's Mac. `build-distribution.sh` (Developer ID, Production, profile 719e9bc1…)

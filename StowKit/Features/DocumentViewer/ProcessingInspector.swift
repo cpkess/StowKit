@@ -5,6 +5,8 @@ struct ProcessingInspector: View {
     let snapshot: ProcessingSnapshot?
     let service: TextSearchService?
     let isTrashed: Bool
+    /// True when Apple Intelligence read some of this document's text from the page image.
+    var readByModel = false
     let retry: (Bool) -> Void
     @State private var showText = false
 
@@ -29,6 +31,11 @@ struct ProcessingInspector: View {
                 } label: { Label("Text Actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
                     .menuStyle(.borderlessButton).fixedSize().help("Text Actions")
                     .disabled(snapshot?.state.isActive == true || snapshot?.state == .queued || isTrashed)
+            }
+            if readByModel {
+                Label("Text read by Apple Intelligence from the page image, because macOS couldn’t read it. Check it before relying on the details.",
+                      systemImage: "sparkles")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if let snapshot {
                 if snapshot.state.isActive && snapshot.pageCount > 0 {

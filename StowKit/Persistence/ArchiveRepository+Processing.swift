@@ -54,6 +54,7 @@ extension ArchiveRepository {
             throw ProcessingError.invalidCheckpoint
         }
         context.insert(Page(documentID: id, pageIndex: index, page: result))
+        if result.readByModel { try noteModelRead(id, page: index) }
         job.completedPages = index + 1
         job.characterCount += result.text.count
         if result.method == .ocr { job.ocrPages += 1 }
@@ -70,6 +71,7 @@ extension ArchiveRepository {
             try queueAnalysis(id, reset: true)
             let pages = try context.fetch(FetchDescriptor<Page>(predicate: #Predicate { $0.documentID == id }))
             for page in pages { context.delete(page) }
+            try forgetModelRead(id)
             job.completedPages = 0; job.pageCount = 0; job.characterCount = 0; job.ocrPages = 0
         }
         job.state = document.trashedAt == nil ? ProcessingState.queued.rawValue : ProcessingState.paused.rawValue

@@ -16,10 +16,20 @@ enum ProcessingState: String, Codable, Sendable {
     }
 }
 
-enum ExtractionMethod: String, Codable, Sendable { case embedded, ocr }
+enum ExtractionMethod: String, Codable, Sendable {
+    case embedded, ocr
+    /// A Mac running a later version may send a method this one has never heard of. Treat it as
+    /// text read from the page rather than stalling sync, which a strict decoder would do.
+    init(from decoder: any Decoder) throws {
+        self = ExtractionMethod(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .ocr
+    }
+}
 struct ExtractedPage: Sendable, Equatable {
     let text: String
     let method: ExtractionMethod
+    /// Read by Apple Intelligence from the page image because text recognition gave nothing usable.
+    /// Kept on this Mac only: the sync format has no field for it, and older Macs reject unknown ones.
+    var readByModel = false
 }
 struct ExtractionInput: Sendable {
     let documentID: UUID

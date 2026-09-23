@@ -106,6 +106,8 @@ final class LibraryStore {
     private var selectedOverride: HouseholdDocument?
     var selectedDocument: HouseholdDocument? { documents.first { $0.id == selection } ?? (selectedOverride?.id == selection ? selectedOverride : nil) }
     private(set) var analysis: [UUID: AnalysisSnapshot] = [:]
+    /// Documents whose text Apple Intelligence read from the page image; kept per Mac.
+    private(set) var readByModel: Set<UUID> = []
     @ObservationIgnored private var intelligenceProcessor: DocumentIntelligenceProcessor?
     @ObservationIgnored private var processor: DocumentProcessor?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
@@ -421,6 +423,7 @@ final class LibraryStore {
         guard let overview = try? repository?.processingOverview(ids: documents.map(\.id)) else { return }
         processing = overview.snapshots
         analysis = (try? repository?.analysisSnapshots(documents.map(\.id) + [selection].compactMap { $0 })) ?? [:]
+        readByModel = Set(((try? repository?.modelReadPages()) ?? [:]).compactMap { UUID(uuidString: $0.key) })
         pendingProcessingCount = overview.pending
     }
     func reconcileSelection() {
@@ -682,6 +685,10 @@ final class LibraryStore {
             lastImportMessage = "Imported \(report.imported) \(report.imported == 1 ? "document" : "documents")"
             if !report.issues.isEmpty { importReport = report }
         }
+    }
+    /// Reads the selected documents from scratch, discarding the text and suggestions held for them.
+    func readTextAgain() {
+        for id in selectedIDs { retryProcessing(id, restart: true) }
     }
     func retryProcessing(_ id: UUID, restart: Bool = false) {
         guard allowCloudEdit() else { return }
