@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.6.0, build 12 (released 2026-09-22; 1.5.0 the same day). The app icon is
+- Deployment target macOS 14.0. Current version 1.6.1, build 13 (released 2026-09-23; 1.5.0 and 1.6.0 on 2026-09-22). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
