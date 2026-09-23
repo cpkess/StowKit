@@ -1,5 +1,25 @@
 # Validation
 
+## 1.6.0 (12) release build
+
+September 22, 2026, owner's Mac. `build-distribution.sh` (Developer ID, Production, profile 719e9bc1…)
+passed its entitlement and Info.plist checks and reported 1.6.0 (12); the app and then the signed DMG
+were notarized, stapled and accepted by Gatekeeper. The `.sha256` was regenerated after stapling and
+checks OK; the appcast was signed with the `stowkit` key and its length matches the DMG (6,318,804
+bytes). The live feed serves 1.6.0 / build 12, and the DMG downloaded from GitHub matches the checksum
+and is accepted by Gatekeeper.
+
+**The stapled app launched on the owner's real archive with iCloud connected** — the first time the home
+page has been seen on a cloud-connected build. It opened on Overview with 8 documents, a "Due in 30
+days 1" chip, collections with counts, totals reading "8 documents · 7.1 MB on this Mac, Trash included
+· 7 in Trash", and the page's iCloud line reading "Up to date". The sidebar's bottom strip showed no
+bleed-through.
+
+Full suite before the build: 187 tests, 0 failures.
+
+**Not established.** A Sparkle update from an older version to this one is recorded separately below if
+it was run; the 1.5.0 features never used on a real archive are still unused.
+
 ## Home page and archive-wide search (1.6.0)
 
 September 22, 2026, owner's Mac, Debug build on the owner's real archive (5 documents outside Trash,

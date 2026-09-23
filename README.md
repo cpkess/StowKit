@@ -81,12 +81,12 @@ See [architecture and implementation notes](docs/ARCHITECTURE.md), the [iCloud a
 
 ## Releases
 
-[v1.5.0](https://github.com/cpkess/StowKit/releases/tag/v1.5.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit, and includes the Share → StowKit extension. It updates itself from these GitHub releases. Read the [release notes](docs/releases/v1.5.0.md) first: it has been tested on one Mac only, several 1.5 features have not yet been used on a real archive, every Mac on an archive must update (1.4 stalls on the new fields), and household sharing is experimental and untested across accounts. Earlier releases: [v1.4.0](docs/releases/v1.4.0.md), [v1.3.0](docs/releases/v1.3.0.md), [v1.2.0](docs/releases/v1.2.0.md), [v1.1.0](docs/releases/v1.1.0.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
+[v1.6.0](https://github.com/cpkess/StowKit/releases/tag/v1.6.0) is a Gamergrams Developer ID signed and Apple-notarized DMG for macOS 14 or later, with Apple Silicon and Intel binaries, using Production CloudKit, and includes the Share → StowKit extension. It updates itself from these GitHub releases. Read the [release notes](docs/releases/v1.6.0.md) first: it has been tested on one Mac only, several 1.5 features have not yet been used on a real archive, a Mac on 1.4 or earlier stalls on 1.5's document fields until it updates, and household sharing is experimental and untested across accounts. Earlier releases: [v1.5.0](docs/releases/v1.5.0.md), [v1.4.0](docs/releases/v1.4.0.md), [v1.3.0](docs/releases/v1.3.0.md), [v1.2.0](docs/releases/v1.2.0.md), [v1.1.0](docs/releases/v1.1.0.md), [v1.0.0](docs/releases/v1.0.0.md), [v0.6.0-alpha.2](docs/releases/v0.6.0-alpha.2.md), and a device-restricted alpha.1.
 
 To package an already signed build without changing its signature:
 
 ```sh
-scripts/package-dmg.sh /path/to/StowKit.app 1.5.0 build/releases
+scripts/package-dmg.sh /path/to/StowKit.app 1.6.0 build/releases
 ```
 
 The script creates a compressed DMG with an Applications link and a SHA-256 sidecar, and verifies the image. It does not perform signing, notarization, or CloudKit Production deployment.
