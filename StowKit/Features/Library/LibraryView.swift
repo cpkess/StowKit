@@ -27,6 +27,7 @@ struct LibraryView: View {
         NavigationSplitView {
             List(selection: $library.destination) {
                 Section {
+                    Label("Overview", systemImage: "square.grid.2x2").tag(LibraryDestination.overview)
                     Label("Inbox", systemImage: "tray")
                         .badge(library.inboxCount)
                         .tag(LibraryDestination.inbox)
@@ -50,26 +51,39 @@ struct LibraryView: View {
             .navigationTitle("StowKit")
             .navigationSplitViewColumnWidth(min: 180, ideal: 205, max: 260)
             .safeAreaInset(edge: .bottom) {
-                HStack {
-                    SyncStatusButton(library: library)
-                    Spacer()
-                    Button { showCollectionSheet = true } label: { Image(systemName: "plus") }
-                        .buttonStyle(.borderless).help("New Collection")
-                        .accessibilityLabel("New Collection").disabled(!library.isReady)
-                }.font(.caption).foregroundStyle(.secondary).padding(14)
+                // The sidebar scrolls under this strip, so it needs its own background: without one,
+                // tag rows show through the archive status.
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack {
+                        SyncStatusButton(library: library)
+                        Spacer()
+                        Button { showCollectionSheet = true } label: { Image(systemName: "plus") }
+                            .buttonStyle(.borderless).help("New Collection")
+                            .accessibilityLabel("New Collection").disabled(!library.isReady)
+                    }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 10)
+                }.background(.bar)
             }
         } content: {
             VStack(spacing: 0) {
                 HStack(spacing: 7) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search \(library.destination == .recent ? "documents" : (library.destination?.title.lowercased() ?? "documents"))", text: $library.search)
+                    TextField(library.searchIsNarrowed && !library.searchEverywhere
+                              ? "Search \(library.destination?.title ?? "documents")" : "Search every document", text: $library.search)
                         .textFieldStyle(.plain).focused($searchFocused)
                         .accessibilityLabel("Search documents")
                     if !library.search.isEmpty {
                         Button { library.search = "" } label: { Image(systemName: "xmark.circle.fill") }
                             .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Clear Search")
                     }
-                }.padding(9).background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6)).padding(12)
+                }.padding(9).background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6)).padding(.horizontal, 12).padding(.top, 12)
+                if library.isReady && !library.search.isEmpty && library.searchIsNarrowed {
+                    Picker("Search In", selection: $library.searchEverywhere) {
+                        Text("In \(library.destination?.title ?? "This View")").tag(false)
+                        Text("Everywhere").tag(true)
+                    }.pickerStyle(.segmented).labelsHidden().padding(.horizontal, 12).padding(.top, 8)
+                }
+                Spacer().frame(height: 12)
                 if library.isReady { FilterBar(library: library) }
                 Divider()
                 if let failure = library.startupError {
@@ -86,10 +100,17 @@ struct LibraryView: View {
                     ContentUnavailableView {
                         Label(library.search.isEmpty ? "No Documents" : "No Results", systemImage: library.search.isEmpty ? "tray" : "magnifyingglass")
                     } description: {
-                        Text(library.search.isEmpty ? (library.destination == .trash ? "Documents in Trash stay here until you restore them or delete them permanently." : "Drop PDFs or images here, or import documents to get started.") : "Try a title, sender, tag, or words inside a document.")
+                        Text(library.search.isEmpty
+                             ? (library.destination == .trash ? "Documents in Trash stay here until you restore them or delete them permanently." : "Drop PDFs or images here, or import documents to get started.")
+                             : (library.elsewhereCount > 0
+                                ? "Nothing in \(library.destination?.title ?? "this view"). \(library.elsewhereCount) elsewhere in the archive."
+                                : "Try a title, sender, tag, or words inside a document."))
                     } actions: {
                         if library.search.isEmpty && library.destination != .trash {
                             Button("Import Documents") { showImporter = true }
+                        }
+                        if !library.search.isEmpty && library.elsewhereCount > 0 {
+                            Button("Search Everywhere (\(library.elsewhereCount))") { library.searchEverything() }
                         }
                     }.frame(maxHeight: .infinity)
                 } else {
@@ -205,11 +226,17 @@ struct LibraryView: View {
                     .task(id: "\(document.id)|\(library.cloudEnabled)|\(library.cloudReadOnly)|\(library.cloudAccessSuspended)") {
                         library.refreshStorageState(document.id)
                     }
+            } else if library.destination == .overview {
+                HomeView(library: library)
             } else {
                 ContentUnavailableView("Select a Document", systemImage: "doc.text.magnifyingglass", description: Text("Preview a document and view its details."))
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { library.showOverview() } label: { Label("Home", systemImage: "square.grid.2x2") }
+                    .help("Home (⇧⌘H)")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button { showImporter = true } label: { Label("Import Document", systemImage: "plus") }
                     .help("Import Document (⌘N)").keyboardShortcut("n").disabled(!library.isReady)
@@ -253,9 +280,10 @@ struct LibraryView: View {
         .onChange(of: library.visibleDocuments.map(\.id)) { library.reconcileSelection() }
         .onReceive(NotificationCenter.default.publisher(for: .stowKitSearch)) { _ in searchFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .stowKitGlobalSearch)) { _ in
-            library.destination = .recent
+            library.searchEverything()
             searchFocused = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .stowKitHome)) { _ in library.showOverview() }
         .sheet(isPresented: $library.showOrganizeInbox) { OrganizeInboxView(library: library) }
         .alert("paperless-ngx Import Finished", isPresented: Binding(get: { library.paperlessSummary != nil }, set: { if !$0 { library.paperlessSummary = nil } })) {
             Button("OK") { library.paperlessSummary = nil }

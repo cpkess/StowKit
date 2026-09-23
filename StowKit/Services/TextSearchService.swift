@@ -105,6 +105,11 @@ import SwiftData
         let byID = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<Record>(predicate: #Predicate { ids.contains($0.id) })).map { ($0.id.uuidString, $0.document) })
         return links.compactMap { link in byID[link.id].map { ($0, link.shared) } }
     }
+    func overview() throws -> HomeOverview {
+        try synchronize()
+        guard let index else { throw ArchiveError.missingRecord }
+        return try index.overview()
+    }
     func facets() throws -> LibraryFacets {
         try synchronize()
         guard let index else { throw ArchiveError.missingRecord }

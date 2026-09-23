@@ -33,9 +33,11 @@ struct StowKitApp: App {
                 }
             }
             CommandGroup(after: .newItem) {
-                Button("Search All Documents") {
+                Button("Home") { NotificationCenter.default.post(name: .stowKitHome, object: nil) }
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+                Button("Search Everywhere") {
                     NotificationCenter.default.post(name: .stowKitGlobalSearch, object: nil)
-                }.keyboardShortcut("k")
+                }.keyboardShortcut("f", modifiers: [.command, .shift])
                 Button("Search Current View") {
                     NotificationCenter.default.post(name: .stowKitSearch, object: nil)
                 }.keyboardShortcut("f")
@@ -81,4 +83,5 @@ struct StowKitApp: App {
 extension Notification.Name {
     static let stowKitSearch = Notification.Name("StowKit.search")
     static let stowKitGlobalSearch = Notification.Name("StowKit.globalSearch")
+    static let stowKitHome = Notification.Name("StowKit.home")
 }

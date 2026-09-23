@@ -22,9 +22,12 @@ struct LibraryCollection: Identifiable, Hashable, Codable, Sendable {
 }
 
 enum LibraryDestination: Hashable, Codable, Sendable {
+    /// The home page. Named "Overview" in the sidebar because "Home" is a default collection.
+    case overview
     case inbox, recent, favorites, trash, collection(String)
     var title: String {
         switch self {
+        case .overview: "Overview"
         case .inbox: "Inbox"
         case .recent: "Recent"
         case .favorites: "Favorites"

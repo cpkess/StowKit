@@ -1,5 +1,60 @@
 # Validation
 
+## Home page and archive-wide search (1.6.0)
+
+September 22, 2026, owner's Mac, Debug build on the owner's real archive (5 documents outside Trash,
+7 in Trash; that build has no iCloud entitlement, so it ran on the local archive).
+
+**What was built.** A new `.overview` destination, called "Overview" in the sidebar because "Home" is
+already a default collection. It is the launch destination, and its page fills the detail area while
+nothing is selected: a search field over the whole archive, "Needs you" chips (Inbox, overdue, due in
+30 days, expiring in 90 days, not in a collection), recently added documents with thumbnails,
+collections with counts, and totals. Search gained a scope: in the Inbox, Favorites, or a collection,
+a segmented control offers "In <place>" or "Everywhere"; ⇧⌘F widens it from anywhere, ⇧⌘H goes home.
+Widening changes only the destination — filter chips still apply, and Trash is never searched from
+outside it.
+
+**Automated.** Three new tests in `StowKitTests/HomeTests.swift`: every overview count equals what its
+chip opens (including the inbox, trashed documents excluded from `unfiled` and from collection counts);
+a collection search stays inside the collection while the same words are found archive-wide; and a
+widened search keeps its filter chips and does not reach into Trash. Mutation-checked — making `unfiled`
+count everything, and making search ignore the destination, failed 5 assertions across the 3 tests.
+
+**In the running app** (window driven through the accessibility API, one fresh launch unless noted):
+launching opens on the home page with nothing selected; typing "treasurer" in its search field showed
+"1 document" and put that document in the list; clicking a recent card opened it; the toolbar Home
+button and ⇧⌘H returned to the page and cleared the search; the "Home 2" collection chip opened the
+Home collection with 2 documents, matching its count. In the Medical collection, searching "treasurer"
+showed "No Results — Nothing in Medical. 1 elsewhere in the archive." with a "Search Everywhere (1)"
+button; pressing it, and separately ⇧⌘F from the Warranties collection, flipped the control to
+Everywhere and found the document. No reentrancy warning appeared in any of these sessions
+(`grep -c reentrant` = 0), including when the list grew from no results to one.
+
+**A sidebar overlap the owner reported, fixed:** the sidebar scrolls under the bottom-left archive
+status, which had no background of its own, so tag rows showed through it. The strip now has a divider
+and a `.bar` background. Checked at rest and mid-scroll on an archive with enough tags to scroll: rows
+stop at the divider, and the scroll indicator ends above it.
+
+**A layout bug found and fixed here:** a recent card's thumbnail is scaled to fill, and its button
+claimed the thumbnail's whole unclipped size — one card's hit area covered the search field. The image
+is now sized by a `Color.clear` overlay, and the card carries its own `contentShape`.
+
+**Full suite, re-run at the 1.6.0 bump: 187 tests, 0 failures** (110 s). An earlier run the same day
+gave 6 failures in the two Vision OCR tests; see the note below — they recovered without any change to
+that code.
+
+**Earlier run: 187 tests, 6 failures, all in the two Vision OCR tests** (`e5rt` error). They fail the
+same way on the committed 1.5.0 code with these changes stashed, so this is the known macOS text
+recognition degradation on this Mac today, not a regression — and it means OCR is currently degraded
+for the released build too.
+
+**Not established.** The home counts were seen on an archive with one document per collection and
+nothing overdue, so the "Needs you" chips were only exercised as the empty case in the running app
+(their counts are covered by tests); no iCloud-connected build was used, so the page's iCloud status
+line and cloud behaviour are untried; "Everywhere" combined with a filter chip was checked by test, not
+in the app; and nothing here was tried on a large archive, where the extra overview queries per search
+have not been measured.
+
 ## 1.5.0 (11) release build
 
 September 22, 2026, owner's Mac. `scripts/build-distribution.sh` (Developer ID, Production, profile

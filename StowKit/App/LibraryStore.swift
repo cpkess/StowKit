@@ -19,7 +19,15 @@ struct ImportReport: Identifiable {
 @MainActor @Observable
 final class LibraryStore {
     private(set) var documents: [HouseholdDocument] = []
-    var destination: LibraryDestination? = .recent { didSet { selectedOverride = nil; refreshTextSearch() } }
+    var destination: LibraryDestination? = .overview {
+        didSet {
+            selectedOverride = nil
+            searchEverywhere = false
+            // The home page shows where a document's details would, so arriving there clears the selection.
+            if destination == .overview { selectedIDs = [] }
+            refreshTextSearch()
+        }
+    }
     /// The list's selection; several documents open the bulk editor instead of one document.
     var selectedIDs: Set<UUID> = []
     /// The single selected document, if exactly one is selected. Setting it selects only that one.
@@ -27,7 +35,28 @@ final class LibraryStore {
         get { selectedIDs.count == 1 ? selectedIDs.first : nil }
         set { selectedIDs = newValue.map { [$0] } ?? [] }
     }
-    var search = "" { didSet { selectedOverride = nil; refreshTextSearch() } }
+    var search = "" {
+        didSet {
+            selectedOverride = nil
+            if search.isEmpty { searchEverywhere = false }
+            refreshTextSearch()
+        }
+    }
+    /// Search the whole archive rather than the destination in the sidebar. Filter chips still apply:
+    /// only the destination is widened. Trash stays separate — nothing outside it is searched from there.
+    var searchEverywhere = false { didSet { if searchEverywhere != oldValue { refreshTextSearch() } } }
+    /// How many documents the same search finds outside this destination, when it found none inside.
+    private(set) var elsewhereCount = 0
+    /// True where the sidebar is narrowing what search covers, so "Everywhere" would show more.
+    var searchIsNarrowed: Bool {
+        switch destination {
+        case .inbox, .favorites, .collection: true
+        default: false
+        }
+    }
+    private(set) var overview = HomeOverview()
+    /// The newest documents, for the home page; it shows them however the list is sorted.
+    private(set) var recentDocuments: [HouseholdDocument] = []
     var filter = LibraryFilter() { didSet { if filter != oldValue { selectedOverride = nil; refreshTextSearch() } } }
     private(set) var facets = LibraryFacets()
     private(set) var savedViews: [SavedView] = []
@@ -235,6 +264,14 @@ final class LibraryStore {
         catch { errorMessage = "Your saved views could not be saved.\n\n\(error.localizedDescription)" }
     }
     func showTag(_ tag: String) { destination = .recent; search = ""; filter = LibraryFilter(tag: tag) }
+    /// The home page, with nothing selected: it shows where a document's details would.
+    func showOverview() { destination = .overview; search = ""; filter = LibraryFilter(); selectedIDs = [] }
+    func showCollection(_ name: String) { destination = .collection(name); search = ""; filter = LibraryFilter() }
+    func showInbox() { destination = .inbox; search = ""; filter = LibraryFilter() }
+    func show(upcoming: LibraryFilter.Upcoming) { destination = .recent; search = ""; filter = LibraryFilter(upcoming: upcoming); newestFirst = true }
+    func showUnfiled() { destination = .recent; search = ""; filter = LibraryFilter(noCollection: true) }
+    /// Widen the current search to the whole archive, from wherever the sidebar is.
+    func searchEverything() { searchEverywhere = true }
     func showUpcoming() { destination = .recent; search = ""; filter = LibraryFilter(upcoming: .soon); newestFirst = true }
     func hasReminder(_ id: UUID, _ kind: ReminderDraft.Kind) -> Bool { addedReminders["\(id):\(kind.rawValue)"] != nil }
     /// Only on the owner's click; macOS asks for Reminders access the first time.
@@ -388,6 +425,8 @@ final class LibraryStore {
     }
     func reconcileSelection() {
         // Never collapse a multi-selection, which has no single selected document by design.
+        // On the home page nothing is selected: the page itself fills the detail area.
+        guard destination != .overview else { if selectedDocument == nil, selectedIDs.count <= 1 { selectedIDs = [] }; return }
         if !isSearchingText && selectedIDs.count <= 1 && selectedDocument == nil { selection = visibleDocuments.first?.id }
     }
     func start() async {
@@ -865,7 +904,8 @@ final class LibraryStore {
         searchGeneration += 1
         let generation = searchGeneration
         if resetLimit { pageLimit = 50 }
-        let query = search, scope = destination, sort = newestFirst, limit = pageLimit, narrowing = filter
+        let query = search, sort = newestFirst, limit = pageLimit, narrowing = filter
+        let scope: LibraryDestination? = searchEverywhere && destination != .trash ? nil : destination
         textSearchError = nil
         guard let service = textSearchService, isReady, !isRebuildingIndex else { isSearchingText = false; return }
         isSearchingText = true
@@ -884,7 +924,17 @@ final class LibraryStore {
                 isSearchingText = false
                 isLoadingMore = false
                 reconcileSelection()
+                elsewhereCount = 0
+                if page.total == 0, searchIsNarrowed, !searchEverywhere, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   let everywhere = try? await service.search(query, destination: nil, filter: narrowing, newestFirst: sort, limit: 1),
+                   searchGeneration == generation {
+                    elsewhereCount = everywhere.total
+                }
                 if let facets = try? await service.facets(), searchGeneration == generation { self.facets = facets }
+                if let overview = try? await service.overview(), searchGeneration == generation { self.overview = overview }
+                if let recent = try? await service.browse(destination: .recent, newestFirst: true, limit: 8), searchGeneration == generation {
+                    recentDocuments = recent.hits.map(\.document)
+                }
             } catch is CancellationError { }
             catch {
                 guard searchGeneration == generation else { return }

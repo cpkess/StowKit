@@ -120,6 +120,25 @@ final class FullTextIndex {
         let row = try rows("SELECT count(*), coalesce(sum(CASE WHEN trashed=0 AND inbox=1 THEN 1 ELSE 0 END),0), coalesce(sum(trashed),0), coalesce(sum(bytes),0) FROM documents")[0]
         return LibraryStatistics(documents: Int(row[0]) ?? 0, inbox: Int(row[1]) ?? 0, trash: Int(row[2]) ?? 0, bytes: Int64(row[3]) ?? 0)
     }
+    /// The home page's counts. Each one runs the filter the chip applies, so clicking a count
+    /// shows exactly those documents.
+    func overview(now: Date = Date()) throws -> HomeOverview {
+        var overview = HomeOverview(statistics: try statistics())
+        overview.overdue = try count(LibraryFilter(upcoming: .overdue), now: now)
+        overview.dueSoon = try count(LibraryFilter(upcoming: .dueSoon), now: now)
+        overview.expiringSoon = try count(LibraryFilter(upcoming: .expiringSoon), now: now)
+        overview.unfiled = try count(LibraryFilter(noCollection: true), now: now)
+        overview.collections = try rows("""
+            SELECT c.name, count(*) FROM collections c JOIN documents d ON d.id=c.documentID
+            WHERE d.trashed=0 GROUP BY c.name ORDER BY count(*) DESC, c.name COLLATE NOCASE LIMIT 100
+            """).map { NamedCount(name: $0[0], count: Int($0[1]) ?? 0) }
+        return overview
+    }
+    func count(_ filter: LibraryFilter, now: Date = Date()) throws -> Int {
+        let (sql, values) = Self.conditions(filter, now: now)
+        let clauses = (["d.trashed=0"] + sql).joined(separator: " AND ")
+        return Int(try rows("SELECT count(*) FROM documents d WHERE " + clauses, values)[0][0]) ?? 0
+    }
     func search(_ query: String, destination: LibraryDestination?, filter: LibraryFilter = LibraryFilter(), newestFirst: Bool, offset: Int, limit: Int) throws -> (rows: [[String]], total: Int) {
         let searching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let expression = SearchQuery.expression(query)

@@ -26,7 +26,7 @@ xcodebuild -project StowKit.xcodeproj -scheme StowKit -configuration Debug -deri
   still be able to clone and run.
 - Tests are hosted XCTest against the real services — no mock parallel implementations.
   They create isolated temp archives; they never touch the user's real library.
-- Deployment target macOS 14.0. Current version 1.5.0, build 11 (released 2026-09-22). The app icon is
+- Deployment target macOS 14.0. Current version 1.6.0, build 12 (released 2026-09-22; 1.5.0 the same day). The app icon is
   drawn by `scripts/make-icon.swift` into `StowKit/Assets.xcassets`; edit the script, not the PNGs.
 
 ## Architecture in one pass
@@ -193,6 +193,17 @@ both places. Don't "simplify" that away.
 - **Collection evidence is compared by words, not characters.** The model reflows its quotes
   (spacing, punctuation, words joined across lines); an exact match rejected 3 of 4 correct
   collections on the owner's documents. See `UnderstandingPolicy.evidenceSupported`.
+- **The home page is a destination, not a window.** `.overview` is the launch destination; `HomeView`
+  fills the detail column while nothing is selected, so arriving there clears the selection and
+  `reconcileSelection` never auto-selects. It is called "Overview" in the sidebar because "Home" is a
+  default collection. Its counts come from `FullTextIndex.overview`, which runs the same
+  `LibraryFilter`s the chips apply — keep it that way, or a count stops matching its documents.
+- **Search scope is `searchEverywhere`**, which widens the destination only: filter chips still apply,
+  and Trash is never searched from outside it. It resets when the destination changes or search is
+  cleared.
+- **A SwiftUI `Button` takes its hit area from the label's unclipped size.** A thumbnail with
+  `scaledToFill` inside `.frame(height:).clipped()` made one home card's button cover the page. Size
+  such an image with a `Color.clear` overlay and give the card a `contentShape`.
 - **Growing a SwiftUI `List` in place logs an NSTableView reentrancy warning** ("will become an assert")
   when rows are inserted above one already shown — a 40-line standalone SwiftUI app does it too. The
   library list is `.id(library.listIdentity)`, which changes in the same update as a new query's results;
