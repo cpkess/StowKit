@@ -141,7 +141,8 @@ release without one breaks updates for everyone.
 scripts/make-appcast.sh build/releases/StowKit-<version>.dmg <version> <build>
 ```
 
-The EdDSA private key is in the owner's login Keychain, account `stowkit` (`sign_update --account
+A Sparkle self-update (1.5.0 → 1.6.0, 2026-09-22) has been verified once on the owner's Mac: offered,
+downloaded, installed and relaunched with no password prompt. The EdDSA private key is in the owner's login Keychain, account `stowkit` (`sign_update --account
 stowkit`); the first use from a new `sign_update` binary raises a Keychain prompt only the owner can approve. Never commit it or print it. The public key is in `Config/StowKitCloud-Info.plist`.
 
 Sign the DMG before notarizing it. The notarytool keychain profile in use is named `AbleKit`.

@@ -17,8 +17,16 @@ bleed-through.
 
 Full suite before the build: 187 tests, 0 failures.
 
-**Not established.** A Sparkle update from an older version to this one is recorded separately below if
-it was run; the 1.5.0 features never used on a real archive are still unused.
+**Sparkle self-update, verified for the first time.** The owner's installed 1.5.0 (build 11) was
+launched from /Applications and asked to check for updates: it offered "StowKit 1.6.0 is now
+available—you have 1.5.0", downloaded it, and after Install and Relaunch /Applications/StowKit.app read
+1.6.0 (12), still `source=Notarized Developer ID`, running as a single instance on the real archive with
+iCloud connected and opening on Overview. No password was asked for. This exercised the signed appcast,
+the EdDSA signature check, the download, and Sparkle's installer service end to end.
+
+**Not established.** Only this 1.5.0 → 1.6.0 hop was tried, on the Mac that built it; an update from
+1.3.0 or 1.4.0, or onto a Mac that did not build the release, is still untested. The 1.5.0 features
+never used on a real archive are still unused.
 
 ## Home page and archive-wide search (1.6.0)
 
