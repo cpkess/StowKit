@@ -1,5 +1,25 @@
 # Validation
 
+## Multi-select editing on the owner's archive (1.6.1)
+
+September 23, 2026, owner's Mac, the released 1.6.1 from /Applications, on the real archive.
+
+Selecting a document and pressing ⇧↓ selected two and opened the bulk editor ("2 Documents Selected",
+with Collections add/remove, Tags, sender, type and date, the status buttons, Suggest Again and Move to
+Trash). Typing `zz-check` and pressing Add put the tag on both: searching `zz-check` returned exactly
+those two documents, with the tag in their snippets, so the edit reached the records and the search
+index. Pressing Remove took it off both and the same search returned "No Results". The archive is back
+as it was.
+
+**Not established.** ⌘-click and ⇧-click multi-selection could not be driven through the accessibility
+API (the modifier does not reach the app that way), so only keyboard range selection has been
+exercised; the other bulk actions (collections, sender, type, date, favourites, Suggest Again, Trash)
+were seen in the editor but not applied.
+
+**Export and Import from paperless-ngx remain untried on a real archive.** Both open the system file
+picker, which runs in a separate process that this assistant is not permitted to drive, so they need
+the owner's own click.
+
 ## 1.6.1 (13) release build
 
 September 23, 2026, owner's Mac. `build-distribution.sh` (Developer ID, Production) reported 1.6.1 (13)
